@@ -1,0 +1,41 @@
+/**
+ * @name Obsidian
+ * @author Notebook Team
+ * @description Obsidian-style dark theme
+ * @version 1.0.0
+ * @website https://github.com/example/notebook
+ * @cssvar --theme-bg #1e1e1e "Main background color"
+ * @cssvar --theme-sidebar #252526 "Sidebar/background cards"
+ * @cssvar --theme-accent #7c3aed "Accent/highlight color"
+ * @cssvar --theme-text #d4d4d4 "Primary text color"
+ * @cssvar --theme-text-muted #a8a8a8 "Muted text color"
+ * @cssvar --theme-border #2a2a2a "Border color"
+ */
+
+:root {
+  --theme-bg: #1e1e1e;
+  --theme-sidebar: #252526;
+  --theme-accent: #7c3aed;
+  --theme-text: #d4d4d4;
+  --theme-text-muted: #a8a8a8;
+  --theme-border: #2a2a2a;
+}
+
+body, .bg-white, .dark\:bg-gray-900 { background-color: var(--theme-bg) !important; }
+[class*="sidebar"], .bg-gray-100, .dark\:bg-gray-800 { background-color: var(--theme-sidebar) !important; }
+
+.text-gray-900, .dark\:text-gray-100, .text-gray-700, .dark\:text-gray-300 { color: var(--theme-text) !important; }
+.text-gray-500, .text-gray-400 { color: var(--theme-text-muted) !important; }
+
+.text-blue-500, .text-blue-600, .bg-blue-500, .hover\:bg-blue-600:hover { color: var(--theme-accent) !important; }
+.bg-blue-500 { background-color: var(--theme-accent) !important; }
+
+.border-gray-200, .border-gray-300, .dark\:border-gray-600 { border-color: var(--theme-border) !important; }
+
+::selection { background-color: var(--theme-accent); color: white; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--theme-bg); }
+::-webkit-scrollbar-thumb { background: var(--theme-border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--theme-accent); }

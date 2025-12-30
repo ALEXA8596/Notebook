@@ -1,7 +1,119 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu, MenuItemConstructorOptions, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import { watch, FSWatcher } from 'node:fs';
 import started from 'electron-squirrel-startup';
+
+// ==========================================
+// Addon System Types and Helpers
+// ==========================================
+
+interface AddonMeta {
+  id: string;
+  name: string;
+  author: string;
+  version: string;
+  description: string;
+  source?: string;
+  website?: string;
+  filePath: string;
+  type: 'plugin' | 'theme';
+  cssVariables?: Array<{ name: string; default: string; description?: string }>;
+}
+
+interface AddonState {
+  enabledPlugins: string[];
+  enabledThemes: string[];
+  pluginPermissions: Record<string, 'limited' | 'partial' | 'full'>;
+  pluginSettings: Record<string, Record<string, unknown>>;
+}
+
+// Parse JSDoc metadata from file content
+function parseAddonMeta(content: string, filePath: string, type: 'plugin' | 'theme'): AddonMeta | null {
+  const metaRegex = /\/\*\*[\s\S]*?\*\//;
+  const match = content.match(metaRegex);
+  if (!match) return null;
+
+  const block = match[0];
+  const getValue = (tag: string): string => {
+    const tagRegex = new RegExp(`@${tag}\\s+(.+)`, 'i');
+    const m = block.match(tagRegex);
+    return m ? m[1].trim() : '';
+  };
+
+  const name = getValue('name');
+  if (!name) return null;
+
+  // Parse CSS variables for themes: @cssvar --name default "description"
+  const cssVariables: Array<{ name: string; default: string; description?: string }> = [];
+  if (type === 'theme') {
+    const varRegex = /@cssvar\s+(--[\w-]+)\s+([^\s"]+|"[^"]*")(?:\s+"([^"]*)")?/gi;
+    let vm;
+    while ((vm = varRegex.exec(block))) {
+      cssVariables.push({
+        name: vm[1],
+        default: vm[2].replace(/^"|"$/g, ''),
+        description: vm[3] || undefined,
+      });
+    }
+  }
+
+  return {
+    id: path.basename(filePath, type === 'plugin' ? '.plugin.js' : '.theme.css'),
+    name,
+    author: getValue('author'),
+    version: getValue('version'),
+    description: getValue('description'),
+    source: getValue('source') || undefined,
+    website: getValue('website') || undefined,
+    filePath,
+    type,
+    cssVariables: cssVariables.length > 0 ? cssVariables : undefined,
+  };
+}
+
+// Get addons directory path
+function getAddonsDir(): string {
+  return path.join(app.getPath('userData'), 'addons');
+}
+
+function getPluginsDir(): string {
+  return path.join(getAddonsDir(), 'plugins');
+}
+
+function getThemesDir(): string {
+  return path.join(getAddonsDir(), 'themes');
+}
+
+function getAddonStateFile(): string {
+  return path.join(getAddonsDir(), 'addon-state.json');
+}
+
+// Ensure addon directories exist
+async function ensureAddonDirs(): Promise<void> {
+  await fs.mkdir(getPluginsDir(), { recursive: true });
+  await fs.mkdir(getThemesDir(), { recursive: true });
+}
+
+// Load addon state from disk
+async function loadAddonState(): Promise<AddonState> {
+  try {
+    const content = await fs.readFile(getAddonStateFile(), 'utf-8');
+    return JSON.parse(content);
+  } catch {
+    return { enabledPlugins: [], enabledThemes: [], pluginPermissions: {}, pluginSettings: {} };
+  }
+}
+
+// Save addon state to disk
+async function saveAddonState(state: AddonState): Promise<void> {
+  await ensureAddonDirs();
+  await fs.writeFile(getAddonStateFile(), JSON.stringify(state, null, 2), 'utf-8');
+}
+
+// File watchers for hot reload
+let pluginWatcher: FSWatcher | null = null;
+let themeWatcher: FSWatcher | null = null;
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -257,6 +369,144 @@ ipcMain.handle('fs:deleteFile', async (_, filePath: string) => {
 ipcMain.handle('fs:showInExplorer', async (_, filePath: string) => {
   const { shell } = await import('electron');
   shell.showItemInFolder(filePath);
+});
+
+// ==========================================
+// Addon System IPC Handlers
+// ==========================================
+
+// Get addons directory paths
+ipcMain.handle('addons:getPaths', async () => {
+  await ensureAddonDirs();
+  return {
+    addons: getAddonsDir(),
+    plugins: getPluginsDir(),
+    themes: getThemesDir(),
+  };
+});
+
+// List all plugins with metadata
+ipcMain.handle('addons:listPlugins', async () => {
+  await ensureAddonDirs();
+  const dir = getPluginsDir();
+  try {
+    const files = await fs.readdir(dir);
+    const plugins: AddonMeta[] = [];
+    for (const file of files) {
+      if (file.endsWith('.plugin.js')) {
+        const filePath = path.join(dir, file);
+        const content = await fs.readFile(filePath, 'utf-8');
+        const meta = parseAddonMeta(content, filePath, 'plugin');
+        if (meta) plugins.push(meta);
+      }
+    }
+    return plugins;
+  } catch {
+    return [];
+  }
+});
+
+// List all themes with metadata
+ipcMain.handle('addons:listThemes', async () => {
+  await ensureAddonDirs();
+  const dir = getThemesDir();
+  try {
+    const files = await fs.readdir(dir);
+    const themes: AddonMeta[] = [];
+    for (const file of files) {
+      if (file.endsWith('.theme.css')) {
+        const filePath = path.join(dir, file);
+        const content = await fs.readFile(filePath, 'utf-8');
+        const meta = parseAddonMeta(content, filePath, 'theme');
+        if (meta) themes.push(meta);
+      }
+    }
+    return themes;
+  } catch {
+    return [];
+  }
+});
+
+// Read plugin content (for execution)
+ipcMain.handle('addons:readPlugin', async (_, filePath: string) => {
+  return await fs.readFile(filePath, 'utf-8');
+});
+
+// Read theme content (CSS)
+ipcMain.handle('addons:readTheme', async (_, filePath: string) => {
+  return await fs.readFile(filePath, 'utf-8');
+});
+
+// Upload/install plugin
+ipcMain.handle('addons:uploadPlugin', async (_, sourcePath: string) => {
+  await ensureAddonDirs();
+  const fileName = path.basename(sourcePath);
+  const destPath = path.join(getPluginsDir(), fileName);
+  await fs.copyFile(sourcePath, destPath);
+  const content = await fs.readFile(destPath, 'utf-8');
+  return parseAddonMeta(content, destPath, 'plugin');
+});
+
+// Upload/install theme
+ipcMain.handle('addons:uploadTheme', async (_, sourcePath: string) => {
+  await ensureAddonDirs();
+  const fileName = path.basename(sourcePath);
+  const destPath = path.join(getThemesDir(), fileName);
+  await fs.copyFile(sourcePath, destPath);
+  const content = await fs.readFile(destPath, 'utf-8');
+  return parseAddonMeta(content, destPath, 'theme');
+});
+
+// Delete addon
+ipcMain.handle('addons:delete', async (_, filePath: string) => {
+  await fs.rm(filePath, { force: true });
+});
+
+// Load addon state
+ipcMain.handle('addons:loadState', async () => {
+  return await loadAddonState();
+});
+
+// Save addon state
+ipcMain.handle('addons:saveState', async (_, state: AddonState) => {
+  await saveAddonState(state);
+});
+
+// Start watching addon folders for changes (hot reload)
+ipcMain.handle('addons:startWatching', async () => {
+  await ensureAddonDirs();
+  
+  // Stop existing watchers
+  if (pluginWatcher) pluginWatcher.close();
+  if (themeWatcher) themeWatcher.close();
+
+  pluginWatcher = watch(getPluginsDir(), (eventType, filename) => {
+    if (filename && (filename.endsWith('.plugin.js'))) {
+      mainWindow?.webContents.send('addons:pluginChanged', { eventType, filename });
+    }
+  });
+
+  themeWatcher = watch(getThemesDir(), (eventType, filename) => {
+    if (filename && (filename.endsWith('.theme.css'))) {
+      mainWindow?.webContents.send('addons:themeChanged', { eventType, filename });
+    }
+  });
+
+  return true;
+});
+
+// Stop watching addon folders
+ipcMain.handle('addons:stopWatching', async () => {
+  if (pluginWatcher) { pluginWatcher.close(); pluginWatcher = null; }
+  if (themeWatcher) { themeWatcher.close(); themeWatcher = null; }
+  return true;
+});
+
+// Open addons folder in file explorer
+ipcMain.handle('addons:openFolder', async (_, type: 'plugins' | 'themes') => {
+  const dir = type === 'plugins' ? getPluginsDir() : getThemesDir();
+  await ensureAddonDirs();
+  shell.openPath(dir);
 });
 
 // This method will be called when Electron has finished

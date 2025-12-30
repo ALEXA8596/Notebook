@@ -1,0 +1,41 @@
+/**
+ * @name Tokyo Night
+ * @author Notebook Team
+ * @description Tokyo Night inspired theme
+ * @version 1.0.0
+ * @website https://github.com/example/notebook
+ * @cssvar --theme-bg #1a1b26 "Main background color"
+ * @cssvar --theme-sidebar #24283b "Sidebar background"
+ * @cssvar --theme-accent #7aa2f7 "Accent/highlight color"
+ * @cssvar --theme-text #c0caf5 "Primary text color"
+ * @cssvar --theme-text-muted #93a0d0 "Muted text color"
+ * @cssvar --theme-border #2b2f45 "Border color"
+ */
+
+:root {
+  --theme-bg: #1a1b26;
+  --theme-sidebar: #24283b;
+  --theme-accent: #7aa2f7;
+  --theme-text: #c0caf5;
+  --theme-text-muted: #93a0d0;
+  --theme-border: #2b2f45;
+}
+
+body, .bg-white, .dark\:bg-gray-900 { background-color: var(--theme-bg) !important; }
+[class*="sidebar"], .bg-gray-100, .dark\:bg-gray-800 { background-color: var(--theme-sidebar) !important; }
+
+.text-gray-900, .dark\:text-gray-100, .text-gray-700, .dark\:text-gray-300 { color: var(--theme-text) !important; }
+.text-gray-500, .text-gray-400 { color: var(--theme-text-muted) !important; }
+
+.text-blue-500, .text-blue-600, .bg-blue-500 { color: var(--theme-accent) !important; }
+.bg-blue-500 { background-color: var(--theme-accent) !important; }
+
+.border-gray-200, .border-gray-300, .dark\:border-gray-600 { border-color: var(--theme-border) !important; }
+
+::selection { background-color: var(--theme-accent); color: white; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--theme-bg); }
+::-webkit-scrollbar-thumb { background: var(--theme-border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--theme-accent); }

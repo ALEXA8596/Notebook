@@ -1,0 +1,41 @@
+/**
+ * @name Mint
+ * @author Notebook Team
+ * @description Fresh mint light theme
+ * @version 1.0.0
+ * @website https://github.com/example/notebook
+ * @cssvar --theme-bg #f0fdf4 "Main background color"
+ * @cssvar --theme-sidebar #dcfce7 "Sidebar background"
+ * @cssvar --theme-accent #16a34a "Accent/highlight color"
+ * @cssvar --theme-text #166534 "Primary text color"
+ * @cssvar --theme-text-muted #4b7a58 "Muted text color"
+ * @cssvar --theme-border #d1f5d8 "Border color"
+ */
+
+:root {
+  --theme-bg: #f0fdf4;
+  --theme-sidebar: #dcfce7;
+  --theme-accent: #16a34a;
+  --theme-text: #166534;
+  --theme-text-muted: #4b7a58;
+  --theme-border: #d1f5d8;
+}
+
+body, .bg-white, .dark\:bg-gray-900 { background-color: var(--theme-bg) !important; }
+[class*="sidebar"], .bg-gray-100, .dark\:bg-gray-800 { background-color: var(--theme-sidebar) !important; }
+
+.text-gray-900, .dark\:text-gray-100, .text-gray-700, .dark\:text-gray-300 { color: var(--theme-text) !important; }
+.text-gray-500, .text-gray-400 { color: var(--theme-text-muted) !important; }
+
+.text-blue-500, .text-blue-600, .bg-blue-500 { color: var(--theme-accent) !important; }
+.bg-blue-500 { background-color: var(--theme-accent) !important; }
+
+.border-gray-200, .border-gray-300, .dark\:border-gray-600 { border-color: var(--theme-border) !important; }
+
+::selection { background-color: var(--theme-accent); color: white; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--theme-bg); }
+::-webkit-scrollbar-thumb { background: var(--theme-border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--theme-accent); }

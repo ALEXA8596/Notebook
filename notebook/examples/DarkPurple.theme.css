@@ -1,0 +1,103 @@
+/**
+ * @name Dark Purple Theme
+ * @author Notebook Team
+ * @description A sleek dark purple theme for Notebook
+ * @version 1.0.0
+ * @website https://github.com/example/notebook
+ * @cssvar --theme-bg #1a1625 "Main background color"
+ * @cssvar --theme-sidebar #231d30 "Sidebar background"
+ * @cssvar --theme-accent #a855f7 "Accent/highlight color"
+ * @cssvar --theme-text #e2e8f0 "Primary text color"
+ * @cssvar --theme-text-muted #94a3b8 "Muted text color"
+ * @cssvar --theme-border #3d3654 "Border color"
+ */
+
+:root {
+  --theme-bg: #1a1625;
+  --theme-sidebar: #231d30;
+  --theme-accent: #a855f7;
+  --theme-text: #e2e8f0;
+  --theme-text-muted: #94a3b8;
+  --theme-border: #3d3654;
+}
+
+/* Override app background */
+body,
+.bg-white,
+.dark\:bg-gray-900 {
+  background-color: var(--theme-bg) !important;
+}
+
+/* Sidebar */
+.bg-gray-100,
+.dark\:bg-gray-800,
+[class*="sidebar"] {
+  background-color: var(--theme-sidebar) !important;
+}
+
+/* Text colors */
+.text-gray-900,
+.dark\:text-gray-100,
+.text-gray-700,
+.dark\:text-gray-300 {
+  color: var(--theme-text) !important;
+}
+
+.text-gray-500,
+.text-gray-400,
+.dark\:text-gray-400,
+.dark\:text-gray-500 {
+  color: var(--theme-text-muted) !important;
+}
+
+/* Accent colors */
+.text-blue-500,
+.text-blue-600,
+.bg-blue-500,
+.hover\:bg-blue-600:hover {
+  color: var(--theme-accent) !important;
+}
+
+.bg-blue-500 {
+  background-color: var(--theme-accent) !important;
+}
+
+/* Borders */
+.border-gray-200,
+.border-gray-300,
+.dark\:border-gray-600,
+.dark\:border-gray-700 {
+  border-color: var(--theme-border) !important;
+}
+
+/* Inputs and cards */
+.bg-gray-50,
+.dark\:bg-gray-700,
+.dark\:bg-gray-800 {
+  background-color: var(--theme-sidebar) !important;
+}
+
+/* Selection highlight */
+::selection {
+  background-color: var(--theme-accent);
+  color: white;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--theme-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--theme-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--theme-accent);
+}

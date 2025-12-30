@@ -1,0 +1,41 @@
+/**
+ * @name Paper
+ * @author Notebook Team
+ * @description Clean light paper theme
+ * @version 1.0.0
+ * @website https://github.com/example/notebook
+ * @cssvar --theme-bg #ffffff "Main background color"
+ * @cssvar --theme-sidebar #f5f5f5 "Sidebar background"
+ * @cssvar --theme-accent #2563eb "Accent/highlight color"
+ * @cssvar --theme-text #1f2937 "Primary text color"
+ * @cssvar --theme-text-muted #6b7280 "Muted text color"
+ * @cssvar --theme-border #e5e7eb "Border color"
+ */
+
+:root {
+  --theme-bg: #ffffff;
+  --theme-sidebar: #f5f5f5;
+  --theme-accent: #2563eb;
+  --theme-text: #1f2937;
+  --theme-text-muted: #6b7280;
+  --theme-border: #e5e7eb;
+}
+
+body, .bg-white, .dark\:bg-gray-900 { background-color: var(--theme-bg) !important; }
+[class*="sidebar"], .bg-gray-100, .dark\:bg-gray-800 { background-color: var(--theme-sidebar) !important; }
+
+.text-gray-900, .dark\:text-gray-100, .text-gray-700, .dark\:text-gray-300 { color: var(--theme-text) !important; }
+.text-gray-500, .text-gray-400 { color: var(--theme-text-muted) !important; }
+
+.text-blue-500, .text-blue-600, .bg-blue-500 { color: var(--theme-accent) !important; }
+.bg-blue-500 { background-color: var(--theme-accent) !important; }
+
+.border-gray-200, .border-gray-300, .dark\:border-gray-600 { border-color: var(--theme-border) !important; }
+
+::selection { background-color: var(--theme-accent); color: white; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--theme-bg); }
+::-webkit-scrollbar-thumb { background: var(--theme-border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--theme-accent); }

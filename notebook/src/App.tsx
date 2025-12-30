@@ -17,6 +17,7 @@ import { QuickSwitcher } from './components/QuickSwitcher';
 import { CopilotPanel } from './components/CopilotPanel';
 import { VersionHistoryModal } from './components/VersionHistoryModal';
 import { useAppStore } from './store/store';
+import { initAddonSystem } from './lib/addonManager';
 import { loadFileStructure, readFileContent, saveFileContent } from './lib/fileSystem';
 import { saveVersion } from './lib/versionHistory';
 import { Layout, Model, TabNode, IJsonModel, Actions, DockLocation } from 'flexlayout-react';
@@ -173,6 +174,24 @@ function App() {
       loadFileStructure(currentPath).then(setFileStructure).catch(console.error);
     }
   }, [currentPath, setFileStructure]);
+
+  // Initialize addon system (plugins and themes)
+  useEffect(() => {
+    const init = async () => {
+      try {
+        await initAddonSystem();
+        console.log('Addon system initialized');
+      } catch (e) {
+        console.error('Failed to initialize addon system:', e);
+      }
+    };
+    init();
+    
+    // Cleanup: stop file watchers when app unmounts
+    return () => {
+      window.electronAPI?.addons?.stopWatching?.();
+    };
+  }, []);
 
   // Handle Global Save
   const handleSave = useCallback(async (isAutosave = false) => {

@@ -31,4 +31,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onFormatAction: (callback: (action: string) => void) => {
     ipcRenderer.on('format-action', (_, action) => callback(action));
   },
+
+  // Addon System APIs
+  addons: {
+    getPaths: () => ipcRenderer.invoke('addons:getPaths'),
+    listPlugins: () => ipcRenderer.invoke('addons:listPlugins'),
+    listThemes: () => ipcRenderer.invoke('addons:listThemes'),
+    readPlugin: (filePath: string) => ipcRenderer.invoke('addons:readPlugin', filePath),
+    readTheme: (filePath: string) => ipcRenderer.invoke('addons:readTheme', filePath),
+    uploadPlugin: (sourcePath: string) => ipcRenderer.invoke('addons:uploadPlugin', sourcePath),
+    uploadTheme: (sourcePath: string) => ipcRenderer.invoke('addons:uploadTheme', sourcePath),
+    delete: (filePath: string) => ipcRenderer.invoke('addons:delete', filePath),
+    loadState: () => ipcRenderer.invoke('addons:loadState'),
+    saveState: (state: unknown) => ipcRenderer.invoke('addons:saveState', state),
+    startWatching: () => ipcRenderer.invoke('addons:startWatching'),
+    stopWatching: () => ipcRenderer.invoke('addons:stopWatching'),
+    openFolder: (type: 'plugins' | 'themes') => ipcRenderer.invoke('addons:openFolder', type),
+    onPluginChanged: (callback: (data: { eventType: string; filename: string }) => void) => {
+      ipcRenderer.on('addons:pluginChanged', (_, data) => callback(data));
+    },
+    onThemeChanged: (callback: (data: { eventType: string; filename: string }) => void) => {
+      ipcRenderer.on('addons:themeChanged', (_, data) => callback(data));
+    },
+  },
 });
