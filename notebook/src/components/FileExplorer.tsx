@@ -1,5 +1,5 @@
 import React, { useState, DragEvent, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown, File, FilePlus, FolderPlus, ImagePlus, Folder, Pencil, GitBranch, Code, Kanban, Table, FileText, Plus, ChevronUp, Trash2, Edit2, Copy, FolderInput, ExternalLink, PanelRight, FileSpreadsheet, Globe, History } from 'lucide-react';
+import { ChevronRight, ChevronDown, File, FilePlus, FolderPlus, ImagePlus, Folder, Pencil, GitBranch, Code, Kanban, Table, FileText, Plus, ChevronUp, Trash2, Edit2, Copy, FolderInput, ExternalLink, PanelRight, FileSpreadsheet, Globe, History, Clipboard } from 'lucide-react';
 import { FileEntry, useAppStore } from '../store/store';
 import { createFile, createFolder, loadFileStructure } from '../lib/fileSystem';
 import clsx from 'clsx';
@@ -127,9 +127,13 @@ export const FileExplorer: React.FC = () => {
   const { fileStructure, currentPath, setFileStructure, closeFile } = useAppStore();
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
   const quickCreateRef = useRef<HTMLDivElement>(null);
+  const explorerRef = useRef<HTMLDivElement>(null);
   
-  // Context menu state
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entry: FileEntry } | null>(null);
+  // Clipboard state for copy/paste
+  const [clipboard, setClipboard] = useState<FileEntry | null>(null);
+  
+  // Context menu state (entry may be null when clicking empty space)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entry?: FileEntry | null } | null>(null);
   const [renameModal, setRenameModal] = useState<{ isOpen: boolean; entry: FileEntry | null; newName: string }>({
     isOpen: false,
     entry: null,
@@ -163,6 +167,12 @@ export const FileExplorer: React.FC = () => {
 
   const handleFileContextMenu = (e: React.MouseEvent, entry: FileEntry) => {
     setContextMenu({ x: e.clientX, y: e.clientY, entry });
+  };
+
+  // Right-click on empty explorer area
+  const handleExplorerContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, entry: null });
   };
 
   const handleRename = async () => {
@@ -221,6 +231,88 @@ export const FileExplorer: React.FC = () => {
       alert("Failed to duplicate: " + (e as Error).message);
     }
   };
+
+  // Copy to clipboard
+  const handleCopy = (entry: FileEntry) => {
+    setClipboard(entry);
+  };
+
+  // Paste from clipboard
+  const handlePaste = async () => {
+    if (!clipboard || !currentPath) return;
+    
+    const entry = clipboard;
+    const ext = entry.name.includes('.') ? '.' + entry.name.split('.').pop() : '';
+    const baseName = entry.name.replace(ext, '');
+    
+    // Determine target directory (same as source)
+    const parentDir = entry.path.substring(0, entry.path.lastIndexOf('\\'));
+    
+    // Generate unique name
+    let newName = `${baseName} copy${ext}`;
+    let counter = 2;
+    while (await window.electronAPI.exists(`${parentDir}\\${newName}`)) {
+      newName = `${baseName} copy ${counter}${ext}`;
+      counter++;
+    }
+    
+    const destPath = `${parentDir}\\${newName}`;
+    
+    try {
+      if (entry.isDirectory) {
+        // For directories, recursively copy
+        await copyDirectoryRecursive(entry.path, destPath);
+      } else {
+        await window.electronAPI.copyFile(entry.path, destPath);
+      }
+      await refreshFileStructure();
+    } catch (e) {
+      console.error("Failed to paste", e);
+      alert("Failed to paste: " + (e as Error).message);
+    }
+  };
+
+  // Helper to copy directory recursively
+  const copyDirectoryRecursive = async (srcDir: string, destDir: string) => {
+    await window.electronAPI.mkdir(destDir);
+    const entries = await window.electronAPI.readDir(srcDir);
+    
+    for (const entry of entries) {
+      const srcPath = `${srcDir}\\${entry.name}`;
+      const destPath = `${destDir}\\${entry.name}`;
+      
+      if (entry.isDirectory) {
+        await copyDirectoryRecursive(srcPath, destPath);
+      } else {
+        await window.electronAPI.copyFile(srcPath, destPath);
+      }
+    }
+  };
+
+  // Keyboard shortcuts for copy/paste
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle if file explorer is focused
+      if (!explorerRef.current?.contains(document.activeElement) && 
+          !explorerRef.current?.matches(':focus-within')) {
+        return;
+      }
+      
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && contextMenu?.entry) {
+        e.preventDefault();
+        handleCopy(contextMenu.entry);
+        setContextMenu(null);
+      }
+      
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v' && clipboard) {
+        e.preventDefault();
+        handlePaste();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [contextMenu, clipboard, currentPath]);
 
   const handleOpenToRight = (entry: FileEntry) => {
     if (!entry.isDirectory) {
@@ -443,7 +535,12 @@ export const FileExplorer: React.FC = () => {
   };
 
   return (
-    <div className="w-full h-full bg-gray-50 dark:bg-gray-950 border-r border-gray-200 dark:border-gray-800 flex flex-col">
+    <div 
+      ref={explorerRef}
+      className="w-full h-full bg-gray-50 dark:bg-gray-950 border-r border-gray-200 dark:border-gray-800 flex flex-col"
+      tabIndex={0}
+      onContextMenu={handleExplorerContextMenu}
+    >
       <div className="p-2 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
         <span className="font-semibold text-sm uppercase text-gray-500">Explorer</span>
         <div className="flex space-x-1">
@@ -528,11 +625,23 @@ export const FileExplorer: React.FC = () => {
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
-          {!contextMenu.entry.isDirectory && (
+          <button
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
+            onClick={async () => {
+              await refreshFileStructure();
+              setContextMenu(null);
+            }}
+          >
+            <PanelRight size={14} className="text-gray-500" />
+            <span>Refresh</span>
+          </button>
+          <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+
+          {contextMenu.entry && !contextMenu.entry.isDirectory && (
             <button
               className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
               onClick={() => {
-                handleOpenToRight(contextMenu.entry);
+                handleOpenToRight(contextMenu.entry!);
                 setContextMenu(null);
               }}
             >
@@ -540,12 +649,12 @@ export const FileExplorer: React.FC = () => {
               <span>Open to the right</span>
             </button>
           )}
-          
-          {!contextMenu.entry.isDirectory && (
+
+          {contextMenu.entry && !contextMenu.entry.isDirectory && (
             <button
               className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
               onClick={() => {
-                window.dispatchEvent(new CustomEvent('app-open-version-history', { detail: { path: contextMenu.entry.path } }));
+                window.dispatchEvent(new CustomEvent('app-open-version-history', { detail: { path: contextMenu.entry!.path } }));
                 setContextMenu(null);
               }}
             >
@@ -553,14 +662,43 @@ export const FileExplorer: React.FC = () => {
               <span>Version history</span>
             </button>
           )}
-          
+
           <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
-          
-          {!contextMenu.entry.isDirectory && (
+
+          <button
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
+            onClick={() => {
+              if (contextMenu.entry) handleCopy(contextMenu.entry);
+              setContextMenu(null);
+            }}
+          >
+            <Copy size={14} className="text-gray-500" />
+            <span>Copy</span>
+            <span className="ml-auto text-xs text-gray-400">Ctrl+C</span>
+          </button>
+          <button
+            className={clsx(
+              "w-full px-3 py-1.5 text-left text-sm flex items-center gap-2",
+              clipboard ? "hover:bg-gray-100 dark:hover:bg-gray-800" : "opacity-50 cursor-not-allowed"
+            )}
+            onClick={() => {
+              if (clipboard) {
+                handlePaste();
+                setContextMenu(null);
+              }
+            }}
+            disabled={!clipboard}
+          >
+            <Clipboard size={14} className="text-gray-500" />
+            <span>Paste</span>
+            <span className="ml-auto text-xs text-gray-400">Ctrl+V</span>
+          </button>
+
+          {contextMenu.entry && !contextMenu.entry.isDirectory && (
             <button
-              className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
+              className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
               onClick={() => {
-                handleDuplicate(contextMenu.entry);
+                handleDuplicate(contextMenu.entry!);
                 setContextMenu(null);
               }}
             >
@@ -571,33 +709,33 @@ export const FileExplorer: React.FC = () => {
           <button
             className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
             onClick={() => {
-              handleMoveTo(contextMenu.entry);
+              if (contextMenu.entry) handleMoveTo(contextMenu.entry);
               setContextMenu(null);
             }}
           >
             <FolderInput size={14} className="text-gray-500" />
             <span>Move file to...</span>
           </button>
-          
+
           <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
-          
+
           <button
             className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
             onClick={() => {
-              handleShowInExplorer(contextMenu.entry);
+              if (contextMenu.entry) handleShowInExplorer(contextMenu.entry);
               setContextMenu(null);
             }}
           >
             <ExternalLink size={14} className="text-gray-500" />
             <span>Show in explorer</span>
           </button>
-          
+
           <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
-          
+
           <button
             className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
             onClick={() => {
-              setRenameModal({ isOpen: true, entry: contextMenu.entry, newName: contextMenu.entry.name });
+              if (contextMenu.entry) setRenameModal({ isOpen: true, entry: contextMenu.entry, newName: contextMenu.entry.name });
               setContextMenu(null);
             }}
           >
@@ -607,7 +745,7 @@ export const FileExplorer: React.FC = () => {
           <button
             className="w-full px-3 py-1.5 text-left text-sm hover:bg-red-100 dark:hover:bg-red-900/30 flex items-center gap-2 text-red-600 dark:text-red-400"
             onClick={() => {
-              handleDelete(contextMenu.entry);
+              if (contextMenu.entry) handleDelete(contextMenu.entry);
               setContextMenu(null);
             }}
           >
@@ -619,8 +757,8 @@ export const FileExplorer: React.FC = () => {
 
       {/* Rename Modal */}
       {renameModal.isOpen && renameModal.entry && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setRenameModal({ isOpen: false, entry: null, newName: '' })}>
-          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl p-4 w-80" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onMouseDown={() => setRenameModal({ isOpen: false, entry: null, newName: '' })}>
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl p-4 w-80" onMouseDown={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold mb-3">Rename</h3>
             <input
               type="text"

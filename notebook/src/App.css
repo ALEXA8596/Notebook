@@ -213,3 +213,14 @@
   background-color: rgba(255, 255, 255, 0.1);
 }
 
+/* Prevent textarea/input dragging - allow text selection */
+textarea,
+input[type="text"],
+.prose {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+textarea {
+  cursor: text;
+}

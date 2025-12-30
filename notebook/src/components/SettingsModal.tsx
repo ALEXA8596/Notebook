@@ -22,13 +22,16 @@ const DEFAULT_PROVIDERS = [
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const { 
     theme, setTheme, 
-    aiProviders, addAIProvider, removeAIProvider, selectedAIProvider, setSelectedAIProvider,
+    aiProviders, addAIProvider, removeAIProvider, updateAIProvider, selectedAIProvider, setSelectedAIProvider,
     autosaveEnabled, setAutosaveEnabled, autosaveInterval, setAutosaveInterval,
     versionHistoryEnabled, setVersionHistoryEnabled, maxVersionsPerFile, setMaxVersionsPerFile
   } = useAppStore();
+  const { toolExecutionMode, setToolExecutionMode } = useAppStore();
   const [showAddForm, setShowAddForm] = useState(false);
   const [newProvider, setNewProvider] = useState({ name: 'OpenAI', apiKey: '', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o' });
   const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({});
+  const [editingProvider, setEditingProvider] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<{ apiKey: string; model: string; baseUrl: string }>({ apiKey: '', model: '', baseUrl: '' });
 
   const handleAddProvider = () => {
     if (!newProvider.apiKey.trim()) {
@@ -156,6 +159,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           </div>
         </div>
 
+        {/* Tool Execution Settings */}
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">AI Tool Execution</h3>
+          <div className="flex items-center justify-between">
+            <label className="text-sm text-gray-600 dark:text-gray-400">Allow AI tools to run without permission</label>
+            <button
+              onClick={() => setToolExecutionMode(toolExecutionMode === 'ask' ? 'allow_all' : 'ask')}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                toolExecutionMode === 'allow_all' ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  toolExecutionMode === 'allow_all' ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">When enabled, the assistant may call tools (read/write/fetch) without prompting. Otherwise, you'll be asked each time, with options to allow once or for the session.</p>
+        </div>
+
         {/* AI Providers Section */}
         <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
           <div className="flex items-center justify-between mb-3">
@@ -258,28 +282,91 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                       />
                       <span className="font-medium text-sm">{provider.name}</span>
                     </div>
-                    <button
-                      onClick={() => removeAIProvider(provider.id)}
-                      className="p-1 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                  <div className="text-xs text-gray-500 space-y-1">
                     <div className="flex items-center gap-2">
-                      <span>API Key:</span>
-                      <span className="font-mono">
-                        {showApiKeys[provider.id] ? provider.apiKey : '••••••••••••'}
-                      </span>
                       <button
-                        onClick={() => setShowApiKeys({ ...showApiKeys, [provider.id]: !showApiKeys[provider.id] })}
-                        className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                        onClick={() => {
+                          // start editing
+                          setEditingProvider(provider.id);
+                          setEditValues({ apiKey: provider.apiKey || '', model: provider.model || '', baseUrl: provider.baseUrl || '' });
+                        }}
+                        className="text-xs text-blue-500 hover:text-blue-600 mr-2"
                       >
-                        {showApiKeys[provider.id] ? <EyeOff size={12} /> : <Eye size={12} />}
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => removeAIProvider(provider.id)}
+                        className="p-1 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
+                      >
+                        <Trash2 size={14} />
                       </button>
                     </div>
-                    <div>Model: {provider.model}</div>
-                    <div className="truncate">URL: {provider.baseUrl}</div>
+                  </div>
+                  <div className="text-xs text-gray-500 space-y-1">
+                    {editingProvider === provider.id ? (
+                      <div className="space-y-2">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">API Key</label>
+                          <input
+                            type="text"
+                            value={editValues.apiKey}
+                            onChange={(e) => setEditValues({ ...editValues, apiKey: e.target.value })}
+                            className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Model</label>
+                          <input
+                            type="text"
+                            value={editValues.model}
+                            onChange={(e) => setEditValues({ ...editValues, model: e.target.value })}
+                            className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Base URL</label>
+                          <input
+                            type="text"
+                            value={editValues.baseUrl}
+                            onChange={(e) => setEditValues({ ...editValues, baseUrl: e.target.value })}
+                            className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              updateAIProvider(provider.id, { apiKey: editValues.apiKey, model: editValues.model, baseUrl: editValues.baseUrl });
+                              setEditingProvider(null);
+                            }}
+                            className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setEditingProvider(null)}
+                            className="px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <span>API Key:</span>
+                          <span className="font-mono">
+                            {showApiKeys[provider.id] ? provider.apiKey : '••••••••••••'}
+                          </span>
+                          <button
+                            onClick={() => setShowApiKeys({ ...showApiKeys, [provider.id]: !showApiKeys[provider.id] })}
+                            className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                          >
+                            {showApiKeys[provider.id] ? <EyeOff size={12} /> : <Eye size={12} />}
+                          </button>
+                        </div>
+                        <div>Model: {provider.model}</div>
+                        <div className="truncate">URL: {provider.baseUrl}</div>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}

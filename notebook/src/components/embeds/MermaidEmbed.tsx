@@ -69,6 +69,15 @@ export const MermaidEmbed: React.FC<MermaidEmbedProps> = ({ definition, onChange
     }
   };
 
+  // Handle Ctrl+Scroll zoom
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -10 : 10;
+      setZoom(z => Math.max(25, Math.min(400, z + delta)));
+    }
+  }, []);
+
   return (
     <div className="w-full h-full flex flex-col bg-white dark:bg-gray-900" onKeyDown={handleKeyDown}>
       {/* Toolbar */}
@@ -155,7 +164,10 @@ export const MermaidEmbed: React.FC<MermaidEmbedProps> = ({ definition, onChange
 
         {/* Preview */}
         {(viewMode === 'preview' || viewMode === 'split') && (
-          <div className={clsx("overflow-auto p-4 flex items-center justify-center bg-white dark:bg-gray-900", viewMode === 'split' ? "w-1/2" : "w-full")}>
+          <div 
+            className={clsx("overflow-auto p-4 flex items-center justify-center bg-white dark:bg-gray-900", viewMode === 'split' ? "w-1/2" : "w-full")}
+            onWheel={handleWheel}
+          >
             {error ? (
               <div className="text-red-500 text-sm">{error}</div>
             ) : svg ? (

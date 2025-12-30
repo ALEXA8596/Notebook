@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, MenuItemConstructorOptions, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import started from 'electron-squirrel-startup';
@@ -95,7 +95,8 @@ const createWindow = () => {
         { role: 'toggleDevTools' },
         { type: 'separator' },
         { role: 'resetZoom' },
-        { role: 'zoomIn' },
+        { label: 'Zoom In', accelerator: 'CmdOrCtrl+=', click: () => mainWindow?.webContents.setZoomLevel(mainWindow.webContents.getZoomLevel() + 0.5) },
+        { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', visible: false, click: () => mainWindow?.webContents.setZoomLevel(mainWindow.webContents.getZoomLevel() + 0.5) },
         { role: 'zoomOut' },
         { type: 'separator' },
         { role: 'togglefullscreen' }
@@ -138,6 +139,31 @@ const createWindow = () => {
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.webContents.openDevTools();
   }
+
+  // Handle external links - open in default browser
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
+  });
+
+  // Also handle navigation within the same window
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    // Allow navigation to the app itself (dev server or file protocol)
+    if (MAIN_WINDOW_VITE_DEV_SERVER_URL && url.startsWith(MAIN_WINDOW_VITE_DEV_SERVER_URL)) {
+      return;
+    }
+    if (url.startsWith('file://')) {
+      return;
+    }
+    // Open external URLs in default browser
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      event.preventDefault();
+      shell.openExternal(url);
+    }
+  });
 };
 
 // ==========================================

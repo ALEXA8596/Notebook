@@ -27,6 +27,7 @@ interface AppState {
   fileStructure: FileEntry[];
   openFiles: string[]; // paths of open files
   activeFile: string | null; // path of active file
+  viewedHistory: string[]; // most recently viewed files (most recent last)
   unsavedChanges: Set<string>; // paths of files with unsaved changes
   fileContents: Record<string, string>;
   theme: 'obsidian' | 'dark' | 'light';
@@ -42,10 +43,13 @@ interface AppState {
   // Version History
   versionHistoryEnabled: boolean;
   maxVersionsPerFile: number;
+  // Tool execution mode: 'ask' (default) or 'allow_all'
+  toolExecutionMode: 'ask' | 'allow_all';
   
   setCurrentPath: (path: string) => void;
   setFileStructure: (files: FileEntry[]) => void;
   openFile: (path: string) => void;
+  markFileViewed: (path: string) => void;
   closeFile: (path: string) => void;
   setActiveFile: (path: string) => void;
   setUnsaved: (path: string, unsaved: boolean) => void;
@@ -65,6 +69,7 @@ interface AppState {
   // Version History Actions
   setVersionHistoryEnabled: (enabled: boolean) => void;
   setMaxVersionsPerFile: (max: number) => void;
+  setToolExecutionMode: (mode: 'ask' | 'allow_all') => void;
 }
 
 // Load AI settings from localStorage
@@ -95,6 +100,7 @@ const loadGeneralSettings = (): {
   autosaveInterval: number;
   versionHistoryEnabled: boolean;
   maxVersionsPerFile: number;
+  toolExecutionMode?: 'ask' | 'allow_all';
 } => {
   try {
     const saved = localStorage.getItem('general-settings');
@@ -108,7 +114,8 @@ const loadGeneralSettings = (): {
     autosaveEnabled: true, 
     autosaveInterval: 30,
     versionHistoryEnabled: true,
-    maxVersionsPerFile: 20
+    maxVersionsPerFile: 20,
+    toolExecutionMode: 'ask'
   };
 };
 
@@ -118,6 +125,7 @@ const saveGeneralSettings = (settings: {
   autosaveInterval: number;
   versionHistoryEnabled: boolean;
   maxVersionsPerFile: number;
+  toolExecutionMode?: 'ask' | 'allow_all';
 }) => {
   try {
     localStorage.setItem('general-settings', JSON.stringify(settings));
@@ -136,6 +144,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeFile: null,
   unsavedChanges: new Set(),
   fileContents: {},
+  viewedHistory: [],
   theme: 'dark',
   
   // AI State
@@ -149,15 +158,21 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Version History State
   versionHistoryEnabled: initialGeneralSettings.versionHistoryEnabled,
   maxVersionsPerFile: initialGeneralSettings.maxVersionsPerFile,
+  toolExecutionMode: initialGeneralSettings.toolExecutionMode || 'ask',
 
   setCurrentPath: (path) => set({ currentPath: path }),
   setFileStructure: (files) => set({ fileStructure: files }),
   openFile: (path) => set((state) => {
     if (!state.openFiles.includes(path)) {
-      return { openFiles: [...state.openFiles, path], activeFile: path };
+      const newOpen = [...state.openFiles, path];
+      const newViewed = [...state.viewedHistory.filter(p => p !== path), path];
+      return { openFiles: newOpen, activeFile: path, viewedHistory: newViewed };
     }
-    return { activeFile: path };
+    // Update viewed history and active file
+    const newViewed = [...state.viewedHistory.filter(p => p !== path), path];
+    return { activeFile: path, viewedHistory: newViewed };
   }),
+  markFileViewed: (path) => set((state) => ({ viewedHistory: [...state.viewedHistory.filter(p => p !== path), path] })),
   closeFile: (path) => set((state) => {
     const newOpenFiles = state.openFiles.filter((p) => p !== path);
     let newActiveFile = state.activeFile;
@@ -167,7 +182,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Clean up content if needed, but maybe keep for cache
     return { openFiles: newOpenFiles, activeFile: newActiveFile };
   }),
-  setActiveFile: (path) => set({ activeFile: path }),
+  setActiveFile: (path) => set((state) => ({ activeFile: path, viewedHistory: [...state.viewedHistory.filter(p => p !== path), path] })),
   setUnsaved: (path, unsaved) => set((state) => {
     const newUnsaved = new Set(state.unsavedChanges);
     if (unsaved) {
@@ -211,6 +226,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       autosaveInterval: state.autosaveInterval,
       versionHistoryEnabled: state.versionHistoryEnabled,
       maxVersionsPerFile: state.maxVersionsPerFile,
+      toolExecutionMode: state.toolExecutionMode,
     };
     saveGeneralSettings(settings);
     return { autosaveEnabled: enabled };
@@ -221,6 +237,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       autosaveInterval: interval,
       versionHistoryEnabled: state.versionHistoryEnabled,
       maxVersionsPerFile: state.maxVersionsPerFile,
+      toolExecutionMode: state.toolExecutionMode,
     };
     saveGeneralSettings(settings);
     return { autosaveInterval: interval };
@@ -233,6 +250,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       autosaveInterval: state.autosaveInterval,
       versionHistoryEnabled: enabled,
       maxVersionsPerFile: state.maxVersionsPerFile,
+      toolExecutionMode: state.toolExecutionMode,
     };
     saveGeneralSettings(settings);
     return { versionHistoryEnabled: enabled };
@@ -243,8 +261,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       autosaveInterval: state.autosaveInterval,
       versionHistoryEnabled: state.versionHistoryEnabled,
       maxVersionsPerFile: max,
+      toolExecutionMode: state.toolExecutionMode,
     };
     saveGeneralSettings(settings);
     return { maxVersionsPerFile: max };
+  }),
+  setToolExecutionMode: (mode) => set((state) => {
+    const settings = {
+      autosaveEnabled: state.autosaveEnabled,
+      autosaveInterval: state.autosaveInterval,
+      versionHistoryEnabled: state.versionHistoryEnabled,
+      maxVersionsPerFile: state.maxVersionsPerFile,
+      toolExecutionMode: mode,
+    };
+    saveGeneralSettings(settings);
+    return { toolExecutionMode: mode };
   }),
 }));

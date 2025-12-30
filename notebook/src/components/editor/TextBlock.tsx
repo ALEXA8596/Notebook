@@ -506,6 +506,8 @@ export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onConte
             onChange={handleChange}
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
+            onDragStart={(e) => e.preventDefault()}
+            draggable={false}
             className="w-full bg-transparent outline-none resize-none font-mono"
             rows={1}
           />
