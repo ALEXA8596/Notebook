@@ -1,3 +1,5 @@
+const colors = require('tailwindcss/colors')
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -7,6 +9,7 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        gray: colors.neutral,
         background: "var(--background)",
         foreground: "var(--foreground)",
         border: "var(--border)",

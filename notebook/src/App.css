@@ -1,6 +1,12 @@
 /* ========================================
    App Layout - Using absolute positioning
    to avoid flexbox conflicts with FlexLayout
+   
+   Performance Optimizations:
+   - Fixed sidebar width prevents layout thrashing
+   - CSS containment on app-main for paint optimization
+   - will-change hints for frequently updated elements
+   - Font smoothing for crisp text rendering
    ======================================== */
 
 .app-container {
@@ -11,8 +17,10 @@
   bottom: 0;
   overflow: hidden;
   font-size: 0.875rem;
-  background-color: var(--background);
-  color: var(--foreground);
+  background-color: var(--theme-bg, var(--background));
+  color: var(--theme-text, var(--foreground));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .app-sidebar {
@@ -20,26 +28,31 @@
   top: 0;
   left: 0;
   bottom: 0;
+  width: 64px;
   overflow: hidden;
-  background-color: #f3f4f6;
+  background-color: var(--theme-sidebar, #f3f4f6); /* gray-100 */
+  flex-shrink: 0;
+  will-change: background-color;
 }
 
 .dark .app-sidebar,
 .obsidian .app-sidebar {
-  background-color: #1e1e1e;
+  background-color: var(--theme-sidebar, #171717); /* neutral-900 */
 }
 
 .app-explorer {
   position: absolute;
   top: 0;
   bottom: 0;
-  overflow: hidden;
-  background-color: #f9fafb;
+  overflow: visible;
+  background-color: var(--theme-sidebar, #fafafa); /* neutral-50 */
+  will-change: background-color;
+  z-index: 50; /* Ensure it's above the main content if needed for dropdowns */
 }
 
 .dark .app-explorer,
 .obsidian .app-explorer {
-  background-color: #252526;
+  background-color: var(--theme-sidebar, #171717); /* neutral-900 - matches sidebar */
 }
 
 .app-main {
@@ -48,12 +61,36 @@
   right: 0;
   bottom: 0;
   overflow: hidden;
-  background-color: #ffffff;
+  background-color: var(--theme-bg, #ffffff);
+  contain: layout style paint;
 }
 
 .dark .app-main,
 .obsidian .app-main {
-  background-color: #1e1e1e;
+  background-color: var(--theme-bg, #171717); /* neutral-900 */
+}
+
+/* Ensure FlexLayout surfaces match theme exactly */
+.flexlayout__layout {
+  background-color: var(--theme-bg, #ffffff);
+}
+
+.dark .flexlayout__layout,
+.obsidian .flexlayout__layout {
+  background-color: var(--theme-bg, #171717);
+}
+
+.flexlayout__tabset,
+.flexlayout__tabset_tabbar_outer,
+.flexlayout__tabset_tabbar_inner,
+.flexlayout__tabset_header,
+.flexlayout__tab_toolbar,
+.flexlayout__tab,
+.flexlayout__tab_window,
+.flexlayout__tab_container,
+.flexlayout__tabset_content {
+  background-color: var(--theme-bg, var(--color-background)) !important;
+  color: var(--theme-text, var(--color-text)) !important;
 }
 
 /* Resize Handles */
@@ -122,12 +159,12 @@
 
 .obsidian .flexlayout__layout,
 .dark .flexlayout__layout {
-  --color-text: #eee;
-  --color-background: #1e1e1e;
-  --color-base: #252526;
-  --color-1: #2d2d2d;
-  --color-2: #333333;
-  --color-3: #3c3c3c;
+  --color-text: #f5f5f5;
+  --color-background: #171717; /* neutral-900 */
+  --color-base: #262626; /* neutral-800 */
+  --color-1: #404040; /* neutral-700 */
+  --color-2: #525252; /* neutral-600 */
+  --color-3: #737373; /* neutral-500 */
   --color-drag1: rgba(0, 0, 0, 0.5);
   --color-drag2: rgba(255, 255, 255, 0.1);
 }
@@ -155,19 +192,21 @@
 }
 
 .flexlayout__tab_button--selected {
-  background-color: var(--color-background);
-  color: #4a9eff; /* Blue highlight */
+  background-color: var(--theme-bg, var(--color-background));
+  color: var(--theme-accent, var(--color-text));
+  border-bottom: 2px solid var(--theme-accent, var(--color-text));
 }
 
 .flexlayout__tab_button:hover {
-  background-color: var(--color-2);
+  background-color: var(--theme-sidebar, var(--color-2));
 }
 
 /* Content Area */
 .flexlayout__tabset_content {
-  background-color: var(--color-background);
+  background-color: var(--theme-bg, var(--color-background));
   min-width: 0;
   min-height: 0;
+  border-top: 1px solid var(--theme-border, var(--color-3));
 }
 
 .flexlayout__tabset_header,
@@ -181,27 +220,27 @@
 
 /* Splitters */
 .flexlayout__splitter {
-  background-color: var(--color-base);
+  background-color: var(--theme-border, var(--color-base));
   z-index: 10; /* Ensure splitter is above content */
 }
 
 .flexlayout__splitter:hover {
-  background-color: #007acc;
+  background-color: var(--theme-accent, var(--color-3));
 }
 
 /* Drag Rect - duplicated rule, use the one at top instead */
 
 /* Editor Container Fix */
 .flexlayout__tab {
-  background-color: var(--color-background);
-  color: var(--color-text);
+  background-color: var(--theme-bg, var(--color-background));
+  color: var(--theme-text, var(--color-text));
 }
 
 /* Ensure Editor takes full height and has correct background */
 .flexlayout__tab > div {
   height: 100%;
   width: 100%;
-  background-color: var(--color-background);
+  background-color: var(--theme-bg, var(--color-background));
 }
 
 /* Dark Mode Specifics for FlexLayout classes if needed */

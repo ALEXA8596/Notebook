@@ -111,7 +111,7 @@ export const HTMLEmbed: React.FC<HTMLEmbedProps> = ({ dataString, onChange }) =>
         {(viewMode === 'code' || viewMode === 'split') && (
           <div className={clsx("flex flex-col", viewMode === 'split' ? "w-1/2 border-r border-gray-200 dark:border-gray-700" : "w-full")}>
             <textarea
-              className="flex-1 w-full p-4 font-mono text-sm bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 resize-none outline-none"
+              className="flex-1 w-full p-4 font-mono text-sm bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 resize-none outline-none"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               onBlur={handleBlur}

@@ -45,14 +45,21 @@ interface AddonsAPI {
   readTheme: (filePath: string) => Promise<string>;
   uploadPlugin: (sourcePath: string) => Promise<AddonMeta | null>;
   uploadTheme: (sourcePath: string) => Promise<AddonMeta | null>;
+  installPresetTheme: (filename: string) => Promise<AddonMeta | null>;
   delete: (filePath: string) => Promise<void>;
   loadState: () => Promise<AddonState>;
   saveState: (state: AddonState) => Promise<void>;
   startWatching: () => Promise<boolean>;
   stopWatching: () => Promise<boolean>;
   openFolder: (type: 'plugins' | 'themes') => Promise<void>;
-  onPluginChanged: (callback: (data: { eventType: string; filename: string }) => void) => void;
-  onThemeChanged: (callback: (data: { eventType: string; filename: string }) => void) => void;
+  onPluginChanged: (callback: (data: { eventType: string; filename: string }) => void) => () => void;
+  onThemeChanged: (callback: (data: { eventType: string; filename: string }) => void) => () => void;
+}
+
+interface VaultAPI {
+  startWatching: (vaultPath: string) => Promise<boolean>;
+  stopWatching: () => Promise<boolean>;
+  onFileChanged: (callback: (data: { eventType: string; filename: string; vaultPath: string }) => void) => () => void;
 }
 
 interface ElectronAPI {
@@ -73,12 +80,18 @@ interface ElectronAPI {
   deleteFile: (filePath: string) => Promise<void>;
   showInExplorer: (filePath: string) => Promise<void>;
   
-  // Menu action listeners
-  onMenuAction: (callback: (action: string) => void) => void;
-  onFormatAction: (callback: (action: string) => void) => void;
+  // Menu action listeners (returns unsubscribe function)
+  onMenuAction: (callback: (action: string) => void) => () => void;
+  onFormatAction: (callback: (action: string) => void) => () => void;
 
   // Addon System APIs
   addons: AddonsAPI;
+
+  // Vault File Watcher APIs
+  vault: VaultAPI;
+
+  // Window APIs
+  openCopilotWindow: () => Promise<boolean>;
 }
 
 declare global {

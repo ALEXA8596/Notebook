@@ -90,9 +90,9 @@ const FileNode: React.FC<FileNodeProps> = ({ entry, depth = 0, onMoveFile, onCon
     <div>
       <div 
         className={clsx(
-          "flex items-center py-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 select-none transition-colors",
-          activeFile === entry.path && "bg-blue-100 dark:bg-blue-900",
-          isDragOver && entry.isDirectory && "bg-blue-200 dark:bg-blue-800 ring-2 ring-blue-500"
+          "flex items-center py-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 select-none transition-colors rounded",
+          activeFile === entry.path && "bg-gray-200 dark:bg-gray-800 font-medium",
+          isDragOver && entry.isDirectory && "bg-gray-300 dark:bg-gray-700 ring-2 ring-gray-400 dark:ring-gray-500"
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={handleClick}
@@ -103,14 +103,22 @@ const FileNode: React.FC<FileNodeProps> = ({ entry, depth = 0, onMoveFile, onCon
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        <span className="mr-1 text-gray-500">
+        <span className="mr-1 text-gray-500 flex-shrink-0">
           {entry.isDirectory ? (
             isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
           ) : (
             <File size={16} />
           )}
         </span>
-        <span className="truncate text-sm">{entry.name}</span>
+        <span className="flex-1 min-w-0 group relative">
+          <span className="truncate text-sm block" title={entry.name}>{entry.name}</span>
+          {/* Tooltip on hover showing full path */}
+          <div className="absolute left-0 top-full mt-1 hidden group-hover:block z-50 pointer-events-none whitespace-nowrap">
+            <div className="bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-2 py-1 rounded text-xs shadow-lg">
+              {entry.path}
+            </div>
+          </div>
+        </span>
       </div>
       {isOpen && entry.children && (
         <div>
@@ -124,7 +132,7 @@ const FileNode: React.FC<FileNodeProps> = ({ entry, depth = 0, onMoveFile, onCon
 };
 
 export const FileExplorer: React.FC = () => {
-  const { fileStructure, currentPath, setFileStructure, closeFile } = useAppStore();
+  const { fileStructure, currentPath, setFileStructure, closeFile, removeFileContent, renameFileContent } = useAppStore();
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
   const quickCreateRef = useRef<HTMLDivElement>(null);
   const explorerRef = useRef<HTMLDivElement>(null);
@@ -179,11 +187,24 @@ export const FileExplorer: React.FC = () => {
     if (!renameModal.entry || !renameModal.newName.trim()) return;
     
     const oldPath = renameModal.entry.path;
-    const parentDir = oldPath.substring(0, oldPath.lastIndexOf('\\'));
-    const newPath = `${parentDir}\\${renameModal.newName}`;
+    const parentDir = oldPath.substring(0, oldPath.lastIndexOf('/'));
+    const newPath = `${parentDir}/${renameModal.newName}`;
+    const wasOpen = useAppStore.getState().openFiles.includes(oldPath);
     
     try {
       await window.electronAPI.moveFile(oldPath, newPath);
+      // Update store: transfer file content from old path to new path
+      renameFileContent(oldPath, newPath);
+      // Close old tab and open new one if file was open
+      if (wasOpen) {
+        window.dispatchEvent(new CustomEvent('app-close-file', { detail: { path: oldPath } }));
+        // Use requestAnimationFrame to ensure tab closes before opening new one
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            useAppStore.getState().openFile(newPath);
+          });
+        });
+      }
       await refreshFileStructure();
       setRenameModal({ isOpen: false, entry: null, newName: '' });
     } catch (e) {
@@ -200,8 +221,20 @@ export const FileExplorer: React.FC = () => {
     if (!confirm(confirmMsg)) return;
     
     try {
+      // If deleting a folder, close all open files within it first
+      if (entry.isDirectory) {
+        const openFiles = useAppStore.getState().openFiles;
+        const filesToClose = openFiles.filter(f => f.startsWith(entry.path + '/'));
+        for (const filePath of filesToClose) {
+          removeFileContent(filePath);
+          window.dispatchEvent(new CustomEvent('app-close-file', { detail: { path: filePath } }));
+        }
+      }
+      
       await window.electronAPI.deleteFile(entry.path);
-      closeFile(entry.path);
+      // Clean up store: remove file content and close file
+      removeFileContent(entry.path);
+      window.dispatchEvent(new CustomEvent('app-close-file', { detail: { path: entry.path } }));
       await refreshFileStructure();
     } catch (e) {
       console.error("Failed to delete", e);
@@ -217,14 +250,14 @@ export const FileExplorer: React.FC = () => {
     let newName = `${baseName} copy${ext}`;
     let counter = 2;
     
-    const parentDir = entry.path.substring(0, entry.path.lastIndexOf('\\'));
-    while (await window.electronAPI.exists(`${parentDir}\\${newName}`)) {
+    const parentDir = entry.path.substring(0, entry.path.lastIndexOf('/'));
+    while (await window.electronAPI.exists(`${parentDir}/${newName}`)) {
       newName = `${baseName} copy ${counter}${ext}`;
       counter++;
     }
     
     try {
-      await window.electronAPI.copyFile(entry.path, `${parentDir}\\${newName}`);
+      await window.electronAPI.copyFile(entry.path, `${parentDir}/${newName}`);
       await refreshFileStructure();
     } catch (e) {
       console.error("Failed to duplicate", e);
@@ -241,22 +274,30 @@ export const FileExplorer: React.FC = () => {
   const handlePaste = async () => {
     if (!clipboard || !currentPath) return;
     
+    // Validate clipboard source still exists before pasting
+    const sourceExists = await window.electronAPI.exists(clipboard.path);
+    if (!sourceExists) {
+      alert('The source file no longer exists. It may have been moved or deleted.');
+      setClipboard(null);
+      return;
+    }
+    
     const entry = clipboard;
     const ext = entry.name.includes('.') ? '.' + entry.name.split('.').pop() : '';
     const baseName = entry.name.replace(ext, '');
     
     // Determine target directory (same as source)
-    const parentDir = entry.path.substring(0, entry.path.lastIndexOf('\\'));
+    const parentDir = entry.path.substring(0, entry.path.lastIndexOf('/'));
     
     // Generate unique name
     let newName = `${baseName} copy${ext}`;
     let counter = 2;
-    while (await window.electronAPI.exists(`${parentDir}\\${newName}`)) {
+    while (await window.electronAPI.exists(`${parentDir}/${newName}`)) {
       newName = `${baseName} copy ${counter}${ext}`;
       counter++;
     }
     
-    const destPath = `${parentDir}\\${newName}`;
+    const destPath = `${parentDir}/${newName}`;
     
     try {
       if (entry.isDirectory) {
@@ -278,8 +319,8 @@ export const FileExplorer: React.FC = () => {
     const entries = await window.electronAPI.readDir(srcDir);
     
     for (const entry of entries) {
-      const srcPath = `${srcDir}\\${entry.name}`;
-      const destPath = `${destDir}\\${entry.name}`;
+      const srcPath = `${srcDir}/${entry.name}`;
+      const destPath = `${destDir}/${entry.name}`;
       
       if (entry.isDirectory) {
         await copyDirectoryRecursive(srcPath, destPath);
@@ -330,15 +371,15 @@ export const FileExplorer: React.FC = () => {
       try {
         const filePath = (file as any).path;
         if (filePath) {
-          const fileName = filePath.split('\\').pop() || file.name;
-          let destPath = `${targetFolder}\\${fileName}`;
+          const fileName = filePath.split(/[\\/]/).pop() || file.name;
+          let destPath = `${targetFolder}/${fileName}`;
           
           // Check if file already exists, append number if so
           let counter = 1;
           const ext = fileName.includes('.') ? '.' + fileName.split('.').pop() : '';
           const baseName = fileName.replace(ext, '');
           while (await window.electronAPI.exists(destPath)) {
-            destPath = `${targetFolder}\\${baseName} (${counter})${ext}`;
+            destPath = `${targetFolder}/${baseName} (${counter})${ext}`;
             counter++;
           }
           
@@ -355,11 +396,22 @@ export const FileExplorer: React.FC = () => {
     // Open folder picker dialog
     const targetFolder = await window.electronAPI.openFolder();
     if (targetFolder) {
+      const wasOpen = useAppStore.getState().openFiles.includes(entry.path);
       try {
         const fileName = entry.name;
-        const destPath = `${targetFolder}\\${fileName}`;
+        const destPath = `${targetFolder}/${fileName}`;
         await window.electronAPI.moveFile(entry.path, destPath);
-        closeFile(entry.path);
+        // Update store: transfer file content from old path to new path
+        renameFileContent(entry.path, destPath);
+        // Close old tab and open new one if file was open
+        if (wasOpen) {
+          window.dispatchEvent(new CustomEvent('app-close-file', { detail: { path: entry.path } }));
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              useAppStore.getState().openFile(destPath);
+            });
+          });
+        }
         await refreshFileStructure();
       } catch (e) {
         console.error("Failed to move", e);
@@ -382,7 +434,7 @@ export const FileExplorer: React.FC = () => {
     let name = `Untitled${extension}`;
     let counter = 1;
     
-    while (await window.electronAPI.exists(`${currentPath}\\${name}`)) {
+    while (await window.electronAPI.exists(`${currentPath}/${name}`)) {
       name = `Untitled ${counter}${extension}`;
       counter++;
     }
@@ -391,17 +443,29 @@ export const FileExplorer: React.FC = () => {
   };
 
   const handleMoveFile = async (sourcePath: string, targetFolder: string) => {
+    const wasOpen = useAppStore.getState().openFiles.includes(sourcePath);
     try {
-      const fileName = sourcePath.split('\\').pop();
+      const fileName = sourcePath.split('/').pop();
       if (!fileName) return;
       
-      const destPath = `${targetFolder}\\${fileName}`;
+      const destPath = `${targetFolder}/${fileName}`;
       
       // Don't move if destination is the same as source parent
-      const sourceParent = sourcePath.substring(0, sourcePath.lastIndexOf('\\'));
+      const sourceParent = sourcePath.substring(0, sourcePath.lastIndexOf('/'));
       if (sourceParent === targetFolder) return;
       
       await window.electronAPI.moveFile(sourcePath, destPath);
+      // Update store: transfer file content from old path to new path
+      renameFileContent(sourcePath, destPath);
+      // Close old tab and open new one if file was open
+      if (wasOpen) {
+        window.dispatchEvent(new CustomEvent('app-close-file', { detail: { path: sourcePath } }));
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            useAppStore.getState().openFile(destPath);
+          });
+        });
+      }
       await refreshFileStructure();
     } catch (e) {
       console.error("Failed to move file", e);
@@ -415,7 +479,7 @@ export const FileExplorer: React.FC = () => {
     
     try {
       const fileName = await generateUntitledName(fileType.extension);
-      const fullPath = `${currentPath}\\${fileName}`;
+      const fullPath = `${currentPath}/${fileName}`;
       await createFile(fullPath, fileType.defaultContent);
       const files = await loadFileStructure(currentPath);
       setFileStructure(files);
@@ -434,12 +498,12 @@ export const FileExplorer: React.FC = () => {
       // Generate unique folder name
       let folderName = 'Untitled Folder';
       let counter = 1;
-      while (await window.electronAPI.exists(`${currentPath}\\${folderName}`)) {
+      while (await window.electronAPI.exists(`${currentPath}/${folderName}`)) {
         folderName = `Untitled Folder ${counter}`;
         counter++;
       }
       
-      const fullPath = `${currentPath}\\${folderName}`;
+      const fullPath = `${currentPath}/${folderName}`;
       await createFolder(fullPath);
       const files = await loadFileStructure(currentPath);
       setFileStructure(files);
@@ -460,9 +524,9 @@ export const FileExplorer: React.FC = () => {
       });
 
       if (selected && typeof selected === 'string') {
-        const fileName = selected.split('\\').pop();
+        const fileName = selected.split(/[\\/]/).pop();
         if (fileName) {
-          const destPath = `${currentPath}\\${fileName}`;
+          const destPath = `${currentPath}/${fileName}`;
           await window.electronAPI.copyFile(selected, destPath);
           const files = await loadFileStructure(currentPath);
           setFileStructure(files);
@@ -505,15 +569,15 @@ export const FileExplorer: React.FC = () => {
           // Get the file path - in Electron, dropped files have a path property
           const filePath = (file as any).path as string;
           if (filePath) {
-            const fileName = filePath.split('\\').pop() || file.name;
-            let destPath = `${currentPath}\\${fileName}`;
+            const fileName = filePath.split(/[\\/]/).pop() || file.name;
+            let destPath = `${currentPath}/${fileName}`;
             
             // Check if file already exists, append number if so
             let counter = 1;
             const ext = fileName.includes('.') ? '.' + fileName.split('.').pop() : '';
             const baseName = fileName.replace(ext, '');
             while (await window.electronAPI.exists(destPath)) {
-              destPath = `${currentPath}\\${baseName} (${counter})${ext}`;
+              destPath = `${currentPath}/${baseName} (${counter})${ext}`;
               counter++;
             }
             
@@ -537,13 +601,13 @@ export const FileExplorer: React.FC = () => {
   return (
     <div 
       ref={explorerRef}
-      className="w-full h-full bg-gray-50 dark:bg-gray-950 border-r border-gray-200 dark:border-gray-800 flex flex-col"
+      className="w-full h-full bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-visible text-gray-900 dark:text-gray-100"
       tabIndex={0}
       onContextMenu={handleExplorerContextMenu}
     >
-      <div className="p-2 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
-        <span className="font-semibold text-sm uppercase text-gray-500">Explorer</span>
-        <div className="flex space-x-1">
+      <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center flex-shrink-0 text-gray-900 dark:text-gray-100 overflow-visible">
+        <span className="font-semibold text-sm uppercase text-gray-700 dark:text-gray-100 truncate">Explorer</span>
+        <div className="flex space-x-1 flex-shrink-0">
           {/* Quick Create Dropdown */}
           <div className="relative" ref={quickCreateRef}>
             <button 
@@ -558,17 +622,17 @@ export const FileExplorer: React.FC = () => {
               {isQuickCreateOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
             </button>
             {isQuickCreateOpen && (
-              <div className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 min-w-[160px] py-1">
+              <div className="absolute left-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl z-[200] min-w-[240px] max-h-[70vh] overflow-auto py-1 text-gray-900 dark:text-gray-50">
                 {FILE_TYPES.map((fileType) => {
                   const Icon = fileType.icon;
                   return (
                     <button
                       key={fileType.extension}
-                      className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
+                      className="w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700"
                       onClick={() => handleQuickCreate(fileType)}
                     >
-                      <Icon size={14} className="text-gray-500" />
-                      <span>{fileType.label}</span>
+                      <Icon size={14} className="text-gray-900 dark:text-gray-100" />
+                      <span className="text-gray-900 dark:text-gray-50">{fileType.label}</span>
                     </button>
                   );
                 })}
@@ -576,21 +640,21 @@ export const FileExplorer: React.FC = () => {
             )}
           </div>
           <button 
-            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded" 
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded transition-colors" 
             title="New File"
             onClick={() => handleQuickCreate(FILE_TYPES[0])}
           >
             <FilePlus size={16} />
           </button>
           <button 
-            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded" 
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded transition-colors" 
             title="New Folder"
             onClick={handleCreateFolder}
           >
             <FolderPlus size={16} />
           </button>
           <button 
-            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded" 
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded transition-colors" 
             title="Import Image"
             onClick={handleImportImage}
           >
@@ -600,8 +664,8 @@ export const FileExplorer: React.FC = () => {
       </div>
       <div 
         className={clsx(
-          "flex-grow overflow-y-auto",
-          isRootDragOver && "bg-blue-100 dark:bg-blue-900/30"
+          "flex-grow overflow-y-auto overflow-x-hidden min-w-0",
+          isRootDragOver && "bg-gray-200 dark:bg-gray-800/50"
         )}
         onDragOver={handleRootDragOver}
         onDragLeave={handleRootDragLeave}
@@ -618,15 +682,16 @@ export const FileExplorer: React.FC = () => {
         )}
       </div>
 
-      {/* Context Menu */}
+      {/* Context Menu - rendered with high z-index to appear above FlexLayout splitters */}
       {contextMenu && (
         <div
-          className="fixed z-50 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[160px]"
+          className="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1 min-w-[200px] text-gray-900 dark:text-gray-50"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
         >
           <button
-            className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
             onClick={async () => {
               await refreshFileStructure();
               setContextMenu(null);
@@ -639,7 +704,7 @@ export const FileExplorer: React.FC = () => {
 
           {contextMenu.entry && !contextMenu.entry.isDirectory && (
             <button
-              className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
+              className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
               onClick={() => {
                 handleOpenToRight(contextMenu.entry!);
                 setContextMenu(null);
@@ -652,7 +717,7 @@ export const FileExplorer: React.FC = () => {
 
           {contextMenu.entry && !contextMenu.entry.isDirectory && (
             <button
-              className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
+              className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
               onClick={() => {
                 window.dispatchEvent(new CustomEvent('app-open-version-history', { detail: { path: contextMenu.entry!.path } }));
                 setContextMenu(null);
@@ -666,7 +731,7 @@ export const FileExplorer: React.FC = () => {
           <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
 
           <button
-            className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
             onClick={() => {
               if (contextMenu.entry) handleCopy(contextMenu.entry);
               setContextMenu(null);
@@ -674,11 +739,11 @@ export const FileExplorer: React.FC = () => {
           >
             <Copy size={14} className="text-gray-500" />
             <span>Copy</span>
-            <span className="ml-auto text-xs text-gray-400">Ctrl+C</span>
+            <span className="ml-auto text-xs text-gray-600 dark:text-gray-300">⌘C</span>
           </button>
           <button
             className={clsx(
-              "w-full px-3 py-1.5 text-left text-sm flex items-center gap-2",
+              "w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 transition-colors",
               clipboard ? "hover:bg-gray-100 dark:hover:bg-gray-800" : "opacity-50 cursor-not-allowed"
             )}
             onClick={() => {
@@ -691,12 +756,12 @@ export const FileExplorer: React.FC = () => {
           >
             <Clipboard size={14} className="text-gray-500" />
             <span>Paste</span>
-            <span className="ml-auto text-xs text-gray-400">Ctrl+V</span>
+            <span className="ml-auto text-xs text-gray-600 dark:text-gray-300">⌘V</span>
           </button>
 
           {contextMenu.entry && !contextMenu.entry.isDirectory && (
             <button
-              className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+              className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
               onClick={() => {
                 handleDuplicate(contextMenu.entry!);
                 setContextMenu(null);
@@ -707,33 +772,33 @@ export const FileExplorer: React.FC = () => {
             </button>
           )}
           <button
-            className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
             onClick={() => {
               if (contextMenu.entry) handleMoveTo(contextMenu.entry);
               setContextMenu(null);
             }}
           >
             <FolderInput size={14} className="text-gray-500" />
-            <span>Move file to...</span>
+            <span>Move to...</span>
           </button>
 
           <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
 
           <button
-            className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
             onClick={() => {
               if (contextMenu.entry) handleShowInExplorer(contextMenu.entry);
               setContextMenu(null);
             }}
           >
             <ExternalLink size={14} className="text-gray-500" />
-            <span>Show in explorer</span>
+            <span>Show in Finder</span>
           </button>
 
           <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
 
           <button
-            className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
             onClick={() => {
               if (contextMenu.entry) setRenameModal({ isOpen: true, entry: contextMenu.entry, newName: contextMenu.entry.name });
               setContextMenu(null);
@@ -743,7 +808,7 @@ export const FileExplorer: React.FC = () => {
             <span>Rename</span>
           </button>
           <button
-            className="w-full px-3 py-1.5 text-left text-sm hover:bg-red-100 dark:hover:bg-red-900/30 flex items-center gap-2 text-red-600 dark:text-red-400"
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-red-900/50 flex items-center gap-2 text-red-400 transition-colors"
             onClick={() => {
               if (contextMenu.entry) handleDelete(contextMenu.entry);
               setContextMenu(null);
@@ -757,8 +822,15 @@ export const FileExplorer: React.FC = () => {
 
       {/* Rename Modal */}
       {renameModal.isOpen && renameModal.entry && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onMouseDown={() => setRenameModal({ isOpen: false, entry: null, newName: '' })}>
-          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl p-4 w-80" onMouseDown={(e) => e.stopPropagation()}>
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setRenameModal({ isOpen: false, entry: null, newName: '' });
+            }
+          }}
+        >
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl p-4 w-80">
             <h3 className="text-lg font-semibold mb-3">Rename</h3>
             <input
               type="text"
@@ -770,6 +842,16 @@ export const FileExplorer: React.FC = () => {
                 if (e.key === 'Escape') setRenameModal({ isOpen: false, entry: null, newName: '' });
               }}
               autoFocus
+              onFocus={(e) => {
+                // Select filename without extension
+                const name = e.target.value;
+                const dotIndex = name.lastIndexOf('.');
+                if (dotIndex > 0) {
+                  e.target.setSelectionRange(0, dotIndex);
+                } else {
+                  e.target.select();
+                }
+              }}
             />
             <div className="flex justify-end gap-2 mt-4">
               <button

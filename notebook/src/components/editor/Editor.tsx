@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { TextBlock } from './TextBlock';
 import { DesmosEmbed } from '../embeds/DesmosEmbed';
@@ -108,6 +108,7 @@ const ResizableWrapper: React.FC<{
 interface EditorProps {
   content: string;
   onChange: (newContent: string) => void;
+  showStatusBar?: boolean;
 }
 
 interface Block {
@@ -118,35 +119,44 @@ interface Block {
   height?: number;
 }
 
-export const Editor: React.FC<EditorProps> = ({ content, onChange }) => {
-  const { currentPath } = useAppStore();
+// Helper to calculate word count and reading time
+const getContentStats = (content: string) => {
+  const text = content.replace(/```[\s\S]*?```/g, ''); // Remove code blocks
+  const words = text.trim().split(/\s+/).filter(w => w.length > 0);
+  const wordCount = words.length;
+  const charCount = text.length;
+  const readingTime = Math.ceil(wordCount / 200); // 200 words per minute
+  return { wordCount, charCount, readingTime };
+};
+
+export const Editor: React.FC<EditorProps> = ({ content, onChange, showStatusBar = true }) => {
+  const { currentPath, activeFile } = useAppStore();
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean; blockId?: string; cursorIndex?: number } | null>(null);
   const [rawModeBlocks, setRawModeBlocks] = useState<Set<string>>(new Set());
+  const prevBlocksRef = useRef<Block[]>([]); // keep ids stable so text blocks don't remount
+
+  // Calculate stats
+  const stats = useMemo(() => getContentStats(content), [content]);
 
   // Parse content into blocks
   useEffect(() => {
-    const newBlocks: Block[] = [];
-    // Regex to match block type and optional attributes like {width=500 height=300}
+    const parsed: Omit<Block, 'id'>[] = [];
     const regex = /```(website|desmos|excalidraw|mermaid|monaco|kanban|spreadsheet)(?: \{width=(\d+) height=(\d+)\})?\n([\s\S]*?)\n```/g;
     let lastIndex = 0;
     let match;
 
     while ((match = regex.exec(content)) !== null) {
-      // Add text before the block
       if (match.index > lastIndex) {
-        newBlocks.push({
-          id: uuidv4(),
+        parsed.push({
           type: 'text',
           content: content.substring(lastIndex, match.index),
         });
       }
 
-      // Add the special block
-      newBlocks.push({
-        id: uuidv4(),
+      parsed.push({
         type: match[1] as any,
-        content: match[4], // Content is now group 4
+        content: match[4],
         width: match[2] ? parseInt(match[2]) : undefined,
         height: match[3] ? parseInt(match[3]) : undefined,
       });
@@ -154,21 +164,25 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange }) => {
       lastIndex = regex.lastIndex;
     }
 
-    // Add remaining text
     if (lastIndex < content.length) {
-      newBlocks.push({
-        id: uuidv4(),
-        type: 'text',
-        content: content.substring(lastIndex),
-      });
+      parsed.push({ type: 'text', content: content.substring(lastIndex) });
     }
 
-    // If empty, add one text block
-    if (newBlocks.length === 0) {
-      newBlocks.push({ id: uuidv4(), type: 'text', content: '' });
+    if (parsed.length === 0) {
+      parsed.push({ type: 'text', content: '' });
     }
 
-    setBlocks(newBlocks);
+    const prev = prevBlocksRef.current;
+    const withIds: Block[] = parsed.map((b, idx) => {
+      const previous = prev[idx];
+      if (previous && previous.type === b.type) {
+        return { ...b, id: previous.id, width: b.width ?? previous.width, height: b.height ?? previous.height };
+      }
+      return { ...b, id: uuidv4() };
+    });
+
+    prevBlocksRef.current = withIds;
+    setBlocks(withIds);
   }, [content]);
 
   const handleBlockChange = useCallback((id: string, newContent: string, width?: number, height?: number) => {
@@ -308,7 +322,7 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange }) => {
               const arrayBuffer = event.target.result as ArrayBuffer;
               const uint8Array = new Uint8Array(arrayBuffer);
               const fileName = `image-${Date.now()}.png`;
-              const fullPath = `${currentPath}\\${fileName}`;
+              const fullPath = `${currentPath}/${fileName}`;
               
               try {
                 await saveImage(fullPath, uint8Array);
@@ -332,18 +346,20 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange }) => {
 
   return (
     <div 
-      className="w-full h-full overflow-y-auto p-8 space-y-4"
+      className="w-full h-full flex flex-col bg-white dark:bg-gray-900 overflow-hidden"
       onContextMenu={(e) => handleContextMenu(e)}
       onPaste={handlePaste}
     >
-      {blocks.map((block) => (
-        <div key={block.id}>
-          {block.type === 'text' && (
-            <TextBlock 
-              content={block.content} 
-              onChange={(c) => handleBlockChange(block.id, c)} 
-              onContextMenu={(e, idx) => {
-                e.stopPropagation();
+      <div className="flex-1 overflow-y-auto">
+        {blocks.map((block) => (
+          <div key={block.id} className={block.type === 'text' ? 'h-full' : ''}>
+            {block.type === 'text' && (
+              <TextBlock 
+                content={block.content} 
+                onChange={(c) => handleBlockChange(block.id, c)} 
+                filePath={activeFile || undefined}
+                onContextMenu={(e, idx) => {
+                  e.stopPropagation();
                 handleContextMenu(e, block.id, idx);
               }}
             />
@@ -358,7 +374,7 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange }) => {
             >
               {rawModeBlocks.has(block.id) ? (
                 <textarea 
-                  className="w-full h-full p-4 font-mono text-sm bg-gray-50 dark:bg-gray-900 resize-none outline-none border-none"
+                  className="w-full h-full p-4 font-mono text-sm bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 resize-none outline-none border-none"
                   value={block.content}
                   onChange={(e) => handleBlockChange(block.id, e.target.value)}
                 />
@@ -377,7 +393,7 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange }) => {
             >
               {rawModeBlocks.has(block.id) ? (
                 <textarea 
-                  className="w-full h-full p-4 font-mono text-sm bg-gray-50 dark:bg-gray-900 resize-none outline-none border-none"
+                  className="w-full h-full p-4 font-mono text-sm bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 resize-none outline-none border-none"
                   value={block.content}
                   onChange={(e) => handleBlockChange(block.id, e.target.value)}
                 />
@@ -396,7 +412,7 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange }) => {
             >
               {rawModeBlocks.has(block.id) ? (
                 <textarea 
-                  className="w-full h-full p-4 font-mono text-sm bg-gray-50 dark:bg-gray-900 resize-none outline-none border-none"
+                  className="w-full h-full p-4 font-mono text-sm bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 resize-none outline-none border-none"
                   value={block.content}
                   onChange={(e) => handleBlockChange(block.id, e.target.value)}
                 />
@@ -415,7 +431,7 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange }) => {
             >
               {rawModeBlocks.has(block.id) ? (
                 <textarea 
-                  className="w-full h-full p-4 font-mono text-sm bg-gray-50 dark:bg-gray-900 resize-none outline-none border-none"
+                  className="w-full h-full p-4 font-mono text-sm bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 resize-none outline-none border-none"
                   value={block.content}
                   onChange={(e) => handleBlockChange(block.id, e.target.value)}
                 />
@@ -434,7 +450,7 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange }) => {
             >
               {rawModeBlocks.has(block.id) ? (
                 <textarea 
-                  className="w-full h-full p-4 font-mono text-sm bg-gray-50 dark:bg-gray-900 resize-none outline-none border-none"
+                  className="w-full h-full p-4 font-mono text-sm bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 resize-none outline-none border-none"
                   value={block.content}
                   onChange={(e) => handleBlockChange(block.id, e.target.value)}
                 />
@@ -453,7 +469,7 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange }) => {
             >
               {rawModeBlocks.has(block.id) ? (
                 <textarea 
-                  className="w-full h-full p-4 font-mono text-sm bg-gray-50 dark:bg-gray-900 resize-none outline-none border-none"
+                  className="w-full h-full p-4 font-mono text-sm bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 resize-none outline-none border-none"
                   value={block.content}
                   onChange={(e) => handleBlockChange(block.id, e.target.value)}
                 />
@@ -472,7 +488,7 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange }) => {
             >
               {rawModeBlocks.has(block.id) ? (
                 <textarea 
-                  className="w-full h-full p-4 font-mono text-sm bg-gray-50 dark:bg-gray-900 resize-none outline-none border-none"
+                  className="w-full h-full p-4 font-mono text-sm bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 resize-none outline-none border-none"
                   value={block.content}
                   onChange={(e) => handleBlockChange(block.id, e.target.value)}
                 />
@@ -481,8 +497,9 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange }) => {
               )}
             </ResizableWrapper>
           )}
-        </div>
-      ))}
+          </div>
+        ))}
+      </div>
       
       {contextMenu && contextMenu.visible && (
         <ContextMenu 
@@ -491,6 +508,19 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange }) => {
           options={menuOptions} 
           onClose={() => setContextMenu(null)} 
         />
+      )}
+      
+      {/* Status Bar */}
+      {showStatusBar && (
+        <div className="shrink-0 flex items-center justify-between px-6 py-2 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+          <div className="flex items-center gap-4">
+            <span>{stats.wordCount} words</span>
+            <span>{stats.charCount} characters</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <span>~{stats.readingTime} min read</span>
+          </div>
+        </div>
       )}
     </div>
   );

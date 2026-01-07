@@ -39,7 +39,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, options, onClose
   return (
     <div 
       ref={menuRef}
-      className="fixed z-50 bg-[#2b2b2b] text-white border border-[#454545] rounded shadow-lg py-1 min-w-[200px] text-sm select-none"
+      className="fixed z-50 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700 rounded shadow-lg py-1 min-w-[200px] text-sm select-none"
       style={style}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -54,7 +54,7 @@ const ContextMenuItem: React.FC<{ option: ContextMenuOption; onClose: () => void
   const [showSubmenu, setShowSubmenu] = useState(false);
 
   if (option.separator) {
-    return <div className="h-[1px] bg-[#454545] my-1" />;
+    return <div className="h-[1px] bg-gray-200 dark:bg-gray-700 my-1" />;
   }
 
   const handleClick = () => {
@@ -66,7 +66,7 @@ const ContextMenuItem: React.FC<{ option: ContextMenuOption; onClose: () => void
 
   return (
     <div 
-      className="relative px-3 py-1.5 hover:bg-[#094771] cursor-pointer flex items-center justify-between group"
+      className="relative px-3 py-1.5 hover:bg-blue-100 dark:hover:bg-blue-900 cursor-pointer flex items-center justify-between group"
       onMouseEnter={() => setShowSubmenu(true)}
       onMouseLeave={() => setShowSubmenu(false)}
       onClick={handleClick}
@@ -81,7 +81,7 @@ const ContextMenuItem: React.FC<{ option: ContextMenuOption; onClose: () => void
       </div>
 
       {option.submenu && showSubmenu && (
-        <div className="absolute left-full top-0 ml-[-1px] bg-[#2b2b2b] border border-[#454545] rounded shadow-lg py-1 min-w-[200px]">
+        <div className="absolute left-full top-0 ml-[-1px] bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-lg py-1 min-w-[200px]">
           {option.submenu.map((subOption, index) => (
             <ContextMenuItem key={index} option={subOption} onClose={onClose} />
           ))}

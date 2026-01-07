@@ -125,10 +125,16 @@ export const CSVEmbed: React.FC<CSVEmbedProps> = ({ dataString, onChange }) => {
   }, [headers]);
 
   const isMounted = React.useRef(false);
+  const onChangeRef = React.useRef(onChange);
+  
+  // Keep onChange ref updated
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   useEffect(() => {
     if (isMounted.current) {
-      onChange(toCSV(headers, rows));
+      onChangeRef.current(toCSV(headers, rows));
     } else {
       isMounted.current = true;
     }

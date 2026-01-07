@@ -1,41 +1,71 @@
 /**
  * @name Mint
  * @author Notebook Team
- * @description Fresh mint light theme
+ * @description Fresh mint green light theme
  * @version 1.0.0
  * @website https://github.com/example/notebook
  * @cssvar --theme-bg #f0fdf4 "Main background color"
  * @cssvar --theme-sidebar #dcfce7 "Sidebar background"
  * @cssvar --theme-accent #16a34a "Accent/highlight color"
- * @cssvar --theme-text #166534 "Primary text color"
- * @cssvar --theme-text-muted #4b7a58 "Muted text color"
- * @cssvar --theme-border #d1f5d8 "Border color"
+ * @cssvar --theme-text #14532d "Primary text color"
+ * @cssvar --theme-text-muted #166534 "Muted text color"
+ * @cssvar --theme-border #bbf7d0 "Border color"
  */
 
 :root {
   --theme-bg: #f0fdf4;
   --theme-sidebar: #dcfce7;
   --theme-accent: #16a34a;
-  --theme-text: #166534;
-  --theme-text-muted: #4b7a58;
-  --theme-border: #d1f5d8;
+  --theme-text: #14532d;
+  --theme-text-muted: #166534;
+  --theme-border: #bbf7d0;
+  
+  --background: #f0fdf4;
+  --foreground: #14532d;
+  --border: #bbf7d0;
+  --accent: #16a34a;
+  --muted: #166534;
+  --card: #dcfce7;
+  --panel: #dcfce7;
+  color-scheme: light;
 }
 
-body, .bg-white, .dark\:bg-gray-900 { background-color: var(--theme-bg) !important; }
-[class*="sidebar"], .bg-gray-100, .dark\:bg-gray-800 { background-color: var(--theme-sidebar) !important; }
+.dark {
+  --background: #f0fdf4;
+  --foreground: #14532d;
+  --border: #bbf7d0;
+  --accent: #16a34a;
+  --muted: #166534;
+  --card: #dcfce7;
+  --panel: #dcfce7;
+  color-scheme: light;
+}
 
-.text-gray-900, .dark\:text-gray-100, .text-gray-700, .dark\:text-gray-300 { color: var(--theme-text) !important; }
-.text-gray-500, .text-gray-400 { color: var(--theme-text-muted) !important; }
+body { background-color: #f0fdf4 !important; color: #14532d !important; }
 
-.text-blue-500, .text-blue-600, .bg-blue-500 { color: var(--theme-accent) !important; }
-.bg-blue-500 { background-color: var(--theme-accent) !important; }
+.app-container, .app-main { background-color: var(--theme-bg) !important; color: var(--theme-text) !important; }
+.app-sidebar, .app-explorer { background-color: var(--theme-sidebar) !important; color: var(--theme-text) !important; }
 
-.border-gray-200, .border-gray-300, .dark\:border-gray-600 { border-color: var(--theme-border) !important; }
+textarea, input, .prose, [class*="editor"], [class*="Editor"] { background-color: var(--theme-bg) !important; color: var(--theme-text) !important; }
 
-::selection { background-color: var(--theme-accent); color: white; }
+.flexlayout__layout, .flexlayout__tab, .flexlayout__tabset, .flexlayout__tabset_content { background-color: var(--theme-bg) !important; color: var(--theme-text) !important; }
+.flexlayout__tab_button { background-color: var(--theme-sidebar) !important; color: var(--theme-text) !important; }
+.flexlayout__tab_button--selected { background-color: var(--theme-bg) !important; border-bottom-color: var(--theme-accent) !important; }
 
-/* Scrollbar */
+.prose, .prose h1, .prose h2, .prose h3, .prose h4, .prose p, .prose li { color: var(--theme-text) !important; }
+.prose code { background-color: var(--theme-sidebar) !important; color: var(--theme-text) !important; }
+.prose pre { background-color: var(--theme-sidebar) !important; }
+.prose a { color: var(--theme-accent) !important; }
+
+[class*="border-gray"], [class*="border-neutral"] { border-color: var(--theme-border) !important; }
+[class*="text-gray-9"], [class*="text-gray-8"], [class*="text-gray-7"], [class*="text-foreground"], .dark\:text-gray-100 { color: var(--theme-text) !important; }
+[class*="text-gray-5"], [class*="text-gray-4"], [class*="text-muted"] { color: var(--theme-text-muted) !important; }
+[class*="bg-white"], [class*="bg-gray-9"], [class*="bg-background"], .dark\:bg-gray-900 { background-color: var(--theme-bg) !important; }
+[class*="bg-gray-1"], [class*="bg-gray-8"], [class*="bg-card"] { background-color: var(--theme-sidebar) !important; }
+
+[class*="Modal"], [role="dialog"] { background-color: var(--theme-bg) !important; color: var(--theme-text) !important; }
+
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: var(--theme-bg); }
 ::-webkit-scrollbar-thumb { background: var(--theme-border); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: var(--theme-accent); }
+::selection { background-color: var(--theme-accent); color: white; }

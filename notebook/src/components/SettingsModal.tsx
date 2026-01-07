@@ -34,11 +34,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     theme, setTheme, 
     aiProviders, addAIProvider, removeAIProvider, updateAIProvider, selectedAIProvider, setSelectedAIProvider,
     autosaveEnabled, setAutosaveEnabled, autosaveInterval, setAutosaveInterval,
-    versionHistoryEnabled, setVersionHistoryEnabled, maxVersionsPerFile, setMaxVersionsPerFile
+    versionHistoryEnabled, setVersionHistoryEnabled, maxVersionsPerFile, setMaxVersionsPerFile,
+    copilotDisplayMode, setCopilotDisplayMode
   } = useAppStore();
   const { toolExecutionMode, setToolExecutionMode } = useAppStore();
-  const [activeTab, setActiveTab] = useState<'general' | 'ai' | 'plugins' | 'themes'>('general');
+  const { sidebarConfig, setSidebarConfig, toggleSidebarItem } = useAppStore();
+  const [activeTab, setActiveTab] = useState<'general' | 'sidebar' | 'ai' | 'plugins' | 'themes'>('general');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
+    new Set(['navigation', 'productivity', 'creative', 'tools', 'system'])
+  );
   const [newProvider, setNewProvider] = useState({ name: 'OpenAI', apiKey: '', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o' });
   const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({});
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
@@ -152,15 +157,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Settings">
       {/* Tab Navigation */}
-      <div className="flex border-b border-gray-200 dark:border-gray-700 mb-4">
-        {(['general', 'ai', 'plugins', 'themes'] as const).map((tab) => (
+      <div className="flex border-b border-border  mb-4">
+        {(['general', 'sidebar', 'ai', 'plugins', 'themes'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 text-sm font-medium capitalize ${
               activeTab === tab
-                ? 'text-blue-500 border-b-2 border-blue-500'
-                : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                ? 'text-purple-600 dark:text-purple-400 border-b-2 border-purple-600'
+                : 'text-gray-500 hover:text-foreground '
             }`}
           >
             {tab === 'ai' ? 'AI Providers' : tab}
@@ -174,13 +179,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           <>
             {/* Theme Setting */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-foreground  mb-1">
                 Theme
               </label>
               <select
                 value={theme}
                 onChange={(e) => setTheme(e.target.value as 'obsidian' | 'light' | 'dark')}
-                className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-gray-100"
+                className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-border  rounded-md shadow-sm focus:outline-none focus:ring-purple-600 focus:border-purple-600 text-foreground "
               >
                 <option value="obsidian">Obsidian</option>
                 <option value="light">Light</option>
@@ -189,7 +194,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             </div>
 
             {/* Autosave Settings */}
-            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <div className="border-t border-border  pt-4">
               <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Autosave</h3>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -201,7 +206,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      className={`inline-block h-4 w-4 transform rounded-full bg-background transition-transform ${
                         autosaveEnabled ? 'translate-x-6' : 'translate-x-1'
                       }`}
                     />
@@ -213,7 +218,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     <select
                       value={autosaveInterval}
                       onChange={(e) => setAutosaveInterval(Number(e.target.value))}
-                      className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
+                      className="w-full px-2 py-1.5 text-sm bg-background dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
                     >
                       <option value={10}>10 seconds</option>
                       <option value={30}>30 seconds</option>
@@ -227,7 +232,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             </div>
 
             {/* Version History Settings */}
-            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <div className="border-t border-border  pt-4">
               <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Version History</h3>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -239,7 +244,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      className={`inline-block h-4 w-4 transform rounded-full bg-background transition-transform ${
                         versionHistoryEnabled ? 'translate-x-6' : 'translate-x-1'
                       }`}
                     />
@@ -251,7 +256,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     <select
                       value={maxVersionsPerFile}
                       onChange={(e) => setMaxVersionsPerFile(Number(e.target.value))}
-                      className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
+                      className="w-full px-2 py-1.5 text-sm bg-background dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
                     >
                       <option value={5}>5 versions</option>
                       <option value={10}>10 versions</option>
@@ -268,7 +273,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             </div>
 
             {/* Tool Execution Settings */}
-            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <div className="border-t border-border  pt-4">
               <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">AI Tool Execution</h3>
               <div className="flex items-center justify-between">
                 <label className="text-sm text-gray-600 dark:text-gray-400">Allow AI tools to run without permission</label>
@@ -279,7 +284,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   }`}
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    className={`inline-block h-4 w-4 transform rounded-full bg-background transition-transform ${
                       toolExecutionMode === 'allow_all' ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
@@ -288,11 +293,135 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">When enabled, the assistant may call tools (read/write/fetch) without prompting.</p>
             </div>
 
+            {/* AI Copilot Display Mode */}
+            <div className="border-t border-border  pt-4">
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">AI Copilot Display</h3>
+              <div className="space-y-2">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="copilotDisplay"
+                    checked={copilotDisplayMode === 'split'}
+                    onChange={() => setCopilotDisplayMode('split')}
+                    className="text-blue-500"
+                  />
+                  <div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Split View</span>
+                    <p className="text-xs text-gray-500">Open AI Copilot as a tab alongside your notes</p>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="copilotDisplay"
+                    checked={copilotDisplayMode === 'popup'}
+                    onChange={() => setCopilotDisplayMode('popup')}
+                    className="text-blue-500"
+                  />
+                  <div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Popup Window</span>
+                    <p className="text-xs text-gray-500">Open AI Copilot in a separate window</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
             {/* Version Info */}
-            <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="pt-4 border-t border-border ">
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Notebook App v0.1.0
               </p>
+            </div>
+          </>
+        )}
+
+        {/* ==================== SIDEBAR TAB ==================== */}
+        {activeTab === 'sidebar' && (
+          <>
+            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">Customize Sidebar</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              Choose which items appear in the sidebar. Items are organized by category.
+            </p>
+            
+            <div className="space-y-2 max-h-[55vh] overflow-y-auto">
+              {[
+                { id: 'navigation', label: 'Navigation' },
+                { id: 'productivity', label: 'Productivity' },
+                { id: 'creative', label: 'Creative' },
+                { id: 'tools', label: 'Tools' },
+                { id: 'system', label: 'System' },
+              ].map((category) => {
+                const categoryItems = [
+                  { id: 'home', icon: '🏠', label: 'Home Dashboard', category: 'navigation' },
+                  { id: 'vault', icon: '📁', label: 'Vault Manager', category: 'navigation' },
+                  { id: 'graph', icon: '🔗', label: 'Graph View', category: 'navigation' },
+                  { id: 'search', icon: '🔍', label: 'Search', category: 'navigation' },
+                  { id: 'daily', icon: '📅', label: 'Daily Note', category: 'navigation' },
+                  { id: 'tasks', icon: '✓', label: 'Tasks', category: 'productivity' },
+                  { id: 'calendar', icon: '📆', label: 'Calendar', category: 'productivity' },
+                  { id: 'insights', icon: '📊', label: 'Insights', category: 'productivity' },
+                  { id: 'whiteboard', icon: '✏️', label: 'Whiteboard', category: 'creative' },
+                  { id: 'diagram', icon: '◇', label: 'Diagram Maker', category: 'creative' },
+                  { id: 'focus', icon: '⏱️', label: 'Focus Mode', category: 'tools' },
+                  { id: 'quicknote', icon: '📝', label: 'Quick Note', category: 'tools' },
+                  { id: 'stickies', icon: '⊞', label: 'All Stickies', category: 'tools' },
+                  { id: 'copilot', icon: '🤖', label: 'AI Copilot', category: 'tools' },
+                  { id: 'command', icon: '⌘', label: 'Command Palette', category: 'tools' },
+                  { id: 'cloud', icon: '☁️', label: 'Cloud Sync', category: 'tools' },
+                  { id: 'save', icon: '💾', label: 'Save', category: 'system' },
+                  { id: 'folder', icon: '📂', label: 'Open Folder', category: 'system' },
+                  { id: 'about', icon: 'ℹ️', label: 'About', category: 'system' },
+                  { id: 'settings', icon: '⚙️', label: 'Settings', category: 'system' },
+                ].filter(item => item.category === category.id);
+
+                return (
+                  <div key={category.id} className="rounded-lg bg-gray-50 dark:bg-gray-800 overflow-hidden">
+                    <button
+                      onClick={() => {
+                        const newSet = new Set(expandedCategories);
+                        if (newSet.has(category.id)) {
+                          newSet.delete(category.id);
+                        } else {
+                          newSet.add(category.id);
+                        }
+                        setExpandedCategories(newSet);
+                      }}
+                      className="w-full flex items-center justify-between p-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <span className="font-medium text-gray-700 dark:text-gray-300">{category.label}</span>
+                      <span className="text-gray-400">{expandedCategories.has(category.id) ? '▼' : '▶'}</span>
+                    </button>
+                    
+                    {expandedCategories.has(category.id) && (
+                      <div className="border-t border-border  p-3 space-y-2">
+                        {categoryItems.map(item => (
+                          <label key={item.id} className="flex items-center gap-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 p-2 rounded transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={sidebarConfig.visibleItems.includes(item.id)}
+                              onChange={() => toggleSidebarItem(item.id)}
+                              className="rounded"
+                            />
+                            <span className="text-lg">{item.icon}</span>
+                            <span className="text-sm text-gray-700 dark:text-gray-300">{item.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-4 border-t border-border  mt-4">
+              <button
+                onClick={() => setSidebarConfig({ 
+                  visibleItems: ['home', 'vault', 'graph', 'search', 'daily', 'tasks', 'calendar', 'insights', 'whiteboard', 'diagram', 'focus', 'quicknote', 'stickies', 'copilot', 'command', 'cloud', 'save', 'folder', 'about', 'settings'] 
+                })}
+                className="w-full py-2 px-3 text-sm bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors"
+              >
+                Reset to Defaults
+              </button>
             </div>
           </>
         )}
@@ -319,7 +448,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   <select
                     value={newProvider.name}
                     onChange={(e) => handlePresetChange(e.target.value)}
-                    className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
+                    className="w-full px-2 py-1.5 text-sm bg-background dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
                   >
                     {DEFAULT_PROVIDERS.map(p => (
                       <option key={p.name} value={p.name}>{p.name}</option>
@@ -333,7 +462,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     value={newProvider.apiKey}
                     onChange={(e) => setNewProvider({ ...newProvider, apiKey: e.target.value })}
                     placeholder="sk-..."
-                    className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
+                    className="w-full px-2 py-1.5 text-sm bg-background dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
                   />
                 </div>
                 <div>
@@ -343,7 +472,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     value={newProvider.baseUrl}
                     onChange={(e) => setNewProvider({ ...newProvider, baseUrl: e.target.value })}
                     placeholder="https://api.openai.com/v1"
-                    className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
+                    className="w-full px-2 py-1.5 text-sm bg-background dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
                   />
                 </div>
                 <div>
@@ -353,7 +482,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     value={newProvider.model}
                     onChange={(e) => setNewProvider({ ...newProvider, model: e.target.value })}
                     placeholder="gpt-4o"
-                    className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
+                    className="w-full px-2 py-1.5 text-sm bg-background dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
                   />
                 </div>
                 <div className="flex gap-2">
@@ -386,7 +515,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     className={`p-3 rounded-lg border ${
                       selectedAIProvider === provider.id
                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                        : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800'
+                        : 'border-border  bg-gray-50 dark:bg-gray-800'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
@@ -427,7 +556,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                               type="text"
                               value={editValues.apiKey}
                               onChange={(e) => setEditValues({ ...editValues, apiKey: e.target.value })}
-                              className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
+                              className="w-full px-2 py-1.5 text-sm bg-background dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
                             />
                           </div>
                           <div>
@@ -436,7 +565,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                               type="text"
                               value={editValues.model}
                               onChange={(e) => setEditValues({ ...editValues, model: e.target.value })}
-                              className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
+                              className="w-full px-2 py-1.5 text-sm bg-background dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
                             />
                           </div>
                           <div>
@@ -445,7 +574,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                               type="text"
                               value={editValues.baseUrl}
                               onChange={(e) => setEditValues({ ...editValues, baseUrl: e.target.value })}
-                              className="w-full px-2 py-1.5 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
+                              className="w-full px-2 py-1.5 text-sm bg-background dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
                             />
                           </div>
                           <div className="flex gap-2">
@@ -544,7 +673,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                       className={`p-3 rounded-lg border ${
                         isEnabled
                           ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                          : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800'
+                          : 'border-border  bg-gray-50 dark:bg-gray-800'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-2">
@@ -596,7 +725,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                             }`}
                           >
                             <span
-                              className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                              className={`inline-block h-3 w-3 transform rounded-full bg-background transition-transform ${
                                 isEnabled ? 'translate-x-5' : 'translate-x-1'
                               }`}
                             />
@@ -630,7 +759,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                               pluginManager?.setPermission(plugin.id, e.target.value as PermissionLevel);
                               setAddonRefreshKey((k) => k + 1);
                             }}
-                            className="text-xs px-2 py-0.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
+                            className="text-xs px-2 py-0.5 bg-background dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
                           >
                             <option value="limited">Limited (Data/UI only)</option>
                             <option value="partial">Partial (+ DOM access)</option>
@@ -641,7 +770,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
                       {/* Plugin Settings Panel */}
                       {expandedPluginSettings === plugin.id && (
-                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                        <div className="mt-3 pt-3 border-t border-border dark:border-gray-600">
                           <PluginSettingsPanel pluginManager={pluginManager} pluginId={plugin.id} />
                         </div>
                       )}
@@ -683,6 +812,59 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </div>
             </div>
 
+            {/* Preset Themes Section */}
+            <div className="mb-4 p-3 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                <Palette size={14} className="text-purple-500" />
+                Preset Themes
+              </h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                Click to install popular themes instantly
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { name: 'Catppuccin', color: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300' },
+                  { name: 'Dracula', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' },
+                  { name: 'Nord', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
+                  { name: 'Gruvbox', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
+                  { name: 'TokyoNight', color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' },
+                  { name: 'Monokai', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' },
+                  { name: 'OneDark', color: 'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300' },
+                  { name: 'Solarized', color: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' },
+                  { name: 'GitHub', color: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' },
+                  { name: 'RosePine', color: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' },
+                  { name: 'Notion', color: 'bg-neutral-100 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-300' },
+                  { name: 'Sepia', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
+                ].map(preset => {
+                  const isInstalled = themes.some(t => t.name.toLowerCase().includes(preset.name.toLowerCase()));
+                  return (
+                    <button
+                      key={preset.name}
+                      onClick={async () => {
+                        if (!isInstalled) {
+                          try {
+                            await window.electronAPI.addons.installPresetTheme(`${preset.name}.theme.css`);
+                            await refreshAddons();
+                          } catch (e) {
+                            console.error('Failed to install preset theme:', e);
+                          }
+                        }
+                      }}
+                      disabled={isInstalled}
+                      className={`px-2.5 py-1 text-xs rounded-full transition-all ${preset.color} ${
+                        isInstalled 
+                          ? 'opacity-50 cursor-not-allowed' 
+                          : 'hover:scale-105 hover:shadow-md cursor-pointer'
+                      }`}
+                      title={isInstalled ? 'Already installed' : `Install ${preset.name} theme`}
+                    >
+                      {preset.name} {isInstalled && '✓'}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
               Themes customize appearance with CSS. Files must be named <code>*.theme.css</code>. Use <code>@cssvar</code> in JSDoc to expose customizable variables.
             </p>
@@ -703,13 +885,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                       className={`p-3 rounded-lg border ${
                         isEnabled
                           ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                          : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800'
+                          : 'border-border  bg-gray-50 dark:bg-gray-800'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">{thm.name}</span>
-                          <span className="text-xs text-gray-400">v{thm.version}</span>
+                          <span className="font-medium text-sm text-gray-900 dark:text-gray-100">{thm.name}</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">v{thm.version}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           {/* Reload */}
@@ -745,14 +927,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                               } else {
                                 await themeManager?.enableTheme(thm.id);
                               }
+                              // Force refresh of local state to update UI immediately
                               setAddonRefreshKey((k) => k + 1);
+                              // Also refresh the themes list to ensure status is synced
+                              const updatedThemes = await window.electronAPI.addons.listThemes();
+                              setThemes(updatedThemes);
                             }}
                             className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
                               isEnabled ? 'bg-purple-500' : 'bg-gray-300 dark:bg-gray-600'
                             }`}
                           >
                             <span
-                              className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                              className={`inline-block h-3 w-3 transform rounded-full bg-background transition-transform ${
                                 isEnabled ? 'translate-x-5' : 'translate-x-1'
                               }`}
                             />
@@ -760,9 +946,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                         </div>
                       </div>
 
-                      <div className="text-xs text-gray-500 space-y-1">
+                      <div className="text-xs text-gray-600 dark:text-gray-300 space-y-1">
                         <div>{thm.description}</div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
                           <span>by {thm.author}</span>
                           {thm.website && (
                             <a href={thm.website} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline flex items-center gap-1">
@@ -774,7 +960,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
                       {/* CSS Variable customization */}
                       {expandedThemeVars === thm.id && cssVars.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600 space-y-2">
+                        <div className="mt-3 pt-3 border-t border-border dark:border-gray-600 space-y-2">
                           <div className="text-xs font-medium text-gray-600 dark:text-gray-300">CSS Variables</div>
                           {cssVars.map((v) => (
                             <div key={v.name} className="flex items-center gap-2">
@@ -786,7 +972,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                                   themeManager?.setCSSVariable(thm.id, v.name, e.target.value);
                                   setAddonRefreshKey((k) => k + 1);
                                 }}
-                                className="flex-1 px-2 py-1 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
+                                className="flex-1 px-2 py-1 text-xs bg-background dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
                               />
                               {v.description && (
                                 <span className="text-xs text-gray-400" title={v.description}>?</span>
@@ -853,7 +1039,7 @@ const PluginSettingsPanel: React.FC<{ pluginManager: PluginManager | null; plugi
                   }`}
                 >
                   <span
-                    className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                    className={`inline-block h-3 w-3 transform rounded-full bg-background transition-transform ${
                       value ? 'translate-x-5' : 'translate-x-1'
                     }`}
                   />
@@ -867,7 +1053,7 @@ const PluginSettingsPanel: React.FC<{ pluginManager: PluginManager | null; plugi
                     pluginManager.setPluginSetting(pluginId, setting.id, e.target.value);
                     setRefreshKey((k) => k + 1);
                   }}
-                  className="px-2 py-1 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded w-32"
+                  className="px-2 py-1 text-xs bg-background dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded w-32"
                 />
               )}
               {setting.type === 'number' && (
@@ -878,7 +1064,7 @@ const PluginSettingsPanel: React.FC<{ pluginManager: PluginManager | null; plugi
                     pluginManager.setPluginSetting(pluginId, setting.id, Number(e.target.value));
                     setRefreshKey((k) => k + 1);
                   }}
-                  className="px-2 py-1 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded w-20"
+                  className="px-2 py-1 text-xs bg-background dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded w-20"
                 />
               )}
               {setting.type === 'color' && (
@@ -899,7 +1085,7 @@ const PluginSettingsPanel: React.FC<{ pluginManager: PluginManager | null; plugi
                     pluginManager.setPluginSetting(pluginId, setting.id, e.target.value);
                     setRefreshKey((k) => k + 1);
                   }}
-                  className="px-2 py-1 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
+                  className="px-2 py-1 text-xs bg-background dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
                 >
                   {setting.options.map((opt) => (
                     <option key={String(opt.value)} value={String(opt.value)}>{opt.label}</option>

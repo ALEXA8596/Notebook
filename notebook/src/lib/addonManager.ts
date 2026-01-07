@@ -441,6 +441,14 @@ export class ThemeManager {
     const meta = this.themes.get(id);
     if (!meta) return false;
 
+    // Enforce single active theme: Disable all other enabled themes
+    const otherThemes = [...this.state.enabledThemes]; // Create copy to iterate safely
+    for (const otherId of otherThemes) {
+      if (otherId !== id) {
+        this.disableTheme(otherId);
+      }
+    }
+
     try {
       let css = await window.electronAPI.addons.readTheme(meta.filePath);
 

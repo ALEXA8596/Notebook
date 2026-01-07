@@ -114,6 +114,7 @@ async function saveAddonState(state: AddonState): Promise<void> {
 // File watchers for hot reload
 let pluginWatcher: FSWatcher | null = null;
 let themeWatcher: FSWatcher | null = null;
+let vaultWatcher: FSWatcher | null = null;
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -121,6 +122,43 @@ if (started) {
 }
 
 let mainWindow: BrowserWindow | null = null;
+let copilotWindow: BrowserWindow | null = null;
+
+// Create AI Copilot window
+const createCopilotWindow = () => {
+  if (copilotWindow && !copilotWindow.isDestroyed()) {
+    copilotWindow.focus();
+    return;
+  }
+
+  copilotWindow = new BrowserWindow({
+    width: 500,
+    height: 700,
+    title: 'AI Copilot',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  // Load the copilot page with a special hash
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    copilotWindow.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}#copilot`);
+  } else {
+    copilotWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`), { hash: 'copilot' });
+  }
+
+  copilotWindow.on('closed', () => {
+    copilotWindow = null;
+  });
+};
+
+// IPC handler to open copilot window
+ipcMain.handle('window:openCopilot', async () => {
+  createCopilotWindow();
+  return true;
+});
 
 const createWindow = () => {
   // Create the browser window.
@@ -144,6 +182,8 @@ const createWindow = () => {
         { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => mainWindow?.webContents.send('menu-action', 'save') },
         { type: 'separator' },
         { label: 'Quick Switcher', accelerator: 'CmdOrCtrl+O', click: () => mainWindow?.webContents.send('menu-action', 'quick-switcher') },
+        { type: 'separator' },
+        { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: () => mainWindow?.webContents.send('menu-action', 'close-tab') },
         { type: 'separator' },
         { role: 'quit' }
       ]
@@ -218,7 +258,7 @@ const createWindow = () => {
       label: 'Window',
       submenu: [
         { role: 'minimize' },
-        { role: 'close' }
+        { label: 'Close Window', accelerator: 'CmdOrCtrl+Shift+W', role: 'close' }
       ]
     },
     {
@@ -284,48 +324,83 @@ const createWindow = () => {
 
 // Open folder dialog
 ipcMain.handle('dialog:openFolder', async () => {
-  const result = await dialog.showOpenDialog({
-    properties: ['openDirectory'],
-  });
-  if (result.canceled) {
-    return null;
+  try {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+    });
+    if (result.canceled) {
+      return null;
+    }
+    return result.filePaths[0];
+  } catch (error) {
+    console.error('Failed to open folder dialog:', error);
+    throw error;
   }
-  return result.filePaths[0];
 });
 
 // Read directory contents
 ipcMain.handle('fs:readDir', async (_, dirPath: string) => {
-  const entries = await fs.readdir(dirPath, { withFileTypes: true });
-  return entries.map((entry) => ({
-    name: entry.name,
-    isDirectory: entry.isDirectory(),
-  }));
+  try {
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    return entries.map((entry) => ({
+      name: entry.name,
+      isDirectory: entry.isDirectory(),
+    }));
+  } catch (error) {
+    console.error('Failed to read directory:', dirPath, error);
+    throw error;
+  }
 });
 
 // Read text file
 ipcMain.handle('fs:readTextFile', async (_, filePath: string) => {
-  return await fs.readFile(filePath, 'utf-8');
+  try {
+    return await fs.readFile(filePath, 'utf-8');
+  } catch (error) {
+    console.error('Failed to read text file:', filePath, error);
+    throw error;
+  }
 });
 
 // Read binary file (for PDFs, etc.)
 ipcMain.handle('fs:readFile', async (_, filePath: string) => {
-  const buffer = await fs.readFile(filePath);
-  return buffer;
+  try {
+    const buffer = await fs.readFile(filePath);
+    return buffer;
+  } catch (error) {
+    console.error('Failed to read file:', filePath, error);
+    throw error;
+  }
 });
 
 // Write text file
 ipcMain.handle('fs:writeTextFile', async (_, filePath: string, content: string) => {
-  await fs.writeFile(filePath, content, 'utf-8');
+  try {
+    await fs.writeFile(filePath, content, 'utf-8');
+  } catch (error) {
+    console.error('Failed to write text file:', filePath, error);
+    throw error;
+  }
 });
 
 // Write binary file
 ipcMain.handle('fs:writeFile', async (_, filePath: string, data: Uint8Array) => {
-  await fs.writeFile(filePath, data);
+  try {
+    await fs.writeFile(filePath, data);
+  } catch (error) {
+    console.error('Failed to write file:', filePath, error);
+    throw error;
+  }
 });
 
 // Create directory
 ipcMain.handle('fs:mkdir', async (_, dirPath: string) => {
-  await fs.mkdir(dirPath, { recursive: true });
+  try {
+    await fs.mkdir(dirPath, { recursive: true });
+  } catch (error) {
+    console.error('Failed to create directory:', dirPath, error);
+    throw error;
+  }
 });
 
 // Check if path exists
@@ -340,35 +415,60 @@ ipcMain.handle('fs:exists', async (_, filePath: string) => {
 
 // Open file dialog (for selecting files)
 ipcMain.handle('dialog:openFile', async (_, options: { filters?: { name: string; extensions: string[] }[] }) => {
-  const result = await dialog.showOpenDialog({
-    properties: ['openFile'],
-    filters: options?.filters,
-  });
-  if (result.canceled) {
-    return null;
+  try {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: options?.filters,
+    });
+    if (result.canceled) {
+      return null;
+    }
+    return result.filePaths[0];
+  } catch (error) {
+    console.error('Failed to open file dialog:', error);
+    throw error;
   }
-  return result.filePaths[0];
 });
 
 // Copy file
 ipcMain.handle('fs:copyFile', async (_, src: string, dest: string) => {
-  await fs.copyFile(src, dest);
+  try {
+    await fs.copyFile(src, dest);
+  } catch (error) {
+    console.error('Failed to copy file:', src, dest, error);
+    throw error;
+  }
 });
 
 // Move/rename file
 ipcMain.handle('fs:moveFile', async (_, src: string, dest: string) => {
-  await fs.rename(src, dest);
+  try {
+    await fs.rename(src, dest);
+  } catch (error) {
+    console.error('Failed to move file:', src, dest, error);
+    throw error;
+  }
 });
 
 // Delete file or directory
 ipcMain.handle('fs:deleteFile', async (_, filePath: string) => {
-  await fs.rm(filePath, { recursive: true, force: true });
+  try {
+    await fs.rm(filePath, { recursive: true, force: true });
+  } catch (error) {
+    console.error('Failed to delete file:', filePath, error);
+    throw error;
+  }
 });
 
 // Show file in system explorer
 ipcMain.handle('fs:showInExplorer', async (_, filePath: string) => {
-  const { shell } = await import('electron');
-  shell.showItemInFolder(filePath);
+  try {
+    const { shell } = await import('electron');
+    shell.showItemInFolder(filePath);
+  } catch (error) {
+    console.error('Failed to show in explorer:', filePath, error);
+    throw error;
+  }
 });
 
 // ==========================================
@@ -457,6 +557,60 @@ ipcMain.handle('addons:uploadTheme', async (_, sourcePath: string) => {
   return parseAddonMeta(content, destPath, 'theme');
 });
 
+// Install preset theme from bundled examples
+ipcMain.handle('addons:installPresetTheme', async (_, filename: string) => {
+  await ensureAddonDirs();
+  
+  // Get path to bundled examples folder
+  let examplesDir: string;
+  if (app.isPackaged) {
+    // In production, examples are in resources/app/examples
+    examplesDir = path.join(process.resourcesPath, 'app', 'examples');
+  } else {
+    // In development, examples are in the project root ../../examples (from .vite/build/)
+    examplesDir = path.join(__dirname, '..', '..', 'examples');
+  }
+  
+  const sourcePath = path.join(examplesDir, filename);
+  const destPath = path.join(getThemesDir(), filename);
+  
+  // Check if source exists, with multiple fallback paths
+  let sourceExists = false;
+  let actualSourcePath = sourcePath;
+  
+  try {
+    await fs.access(sourcePath);
+    sourceExists = true;
+  } catch {
+    // Try alternative path for development
+    const altPath = path.join(__dirname, '..', '..', '..', 'examples', filename);
+    try {
+      await fs.access(altPath);
+      sourceExists = true;
+      actualSourcePath = altPath;
+    } catch {
+      // Last resort: try from notebook directory
+      const notebookExamplesPath = path.join(__dirname, '..', '..', '..', 'notebook', 'examples', filename);
+      try {
+        await fs.access(notebookExamplesPath);
+        sourceExists = true;
+        actualSourcePath = notebookExamplesPath;
+      } catch {
+        console.error(`Theme not found at: ${sourcePath}, ${altPath}, ${notebookExamplesPath}`);
+        throw new Error(`Preset theme not found: ${filename}`);
+      }
+    }
+  }
+  
+  if (!sourceExists) {
+    throw new Error(`Preset theme not found: ${filename}`);
+  }
+  
+  await fs.copyFile(actualSourcePath, destPath);
+  const content = await fs.readFile(destPath, 'utf-8');
+  return parseAddonMeta(content, destPath, 'theme');
+});
+
 // Delete addon
 ipcMain.handle('addons:delete', async (_, filePath: string) => {
   await fs.rm(filePath, { force: true });
@@ -507,6 +661,44 @@ ipcMain.handle('addons:openFolder', async (_, type: 'plugins' | 'themes') => {
   const dir = type === 'plugins' ? getPluginsDir() : getThemesDir();
   await ensureAddonDirs();
   shell.openPath(dir);
+});
+
+// ==========================================
+// Vault File Watcher
+// ==========================================
+
+// Start watching a vault folder for changes
+ipcMain.handle('vault:startWatching', async (_, vaultPath: string) => {
+  // Stop existing watcher
+  if (vaultWatcher) {
+    vaultWatcher.close();
+    vaultWatcher = null;
+  }
+
+  try {
+    vaultWatcher = watch(vaultPath, { recursive: true }, (eventType, filename) => {
+      if (filename) {
+        // Ignore hidden files and temp files
+        if (filename.startsWith('.') || filename.includes('~') || filename.endsWith('.tmp')) {
+          return;
+        }
+        mainWindow?.webContents.send('vault:fileChanged', { eventType, filename, vaultPath });
+      }
+    });
+    return true;
+  } catch (err) {
+    console.error('Failed to start vault watcher:', err);
+    return false;
+  }
+});
+
+// Stop watching vault folder
+ipcMain.handle('vault:stopWatching', async () => {
+  if (vaultWatcher) {
+    vaultWatcher.close();
+    vaultWatcher = null;
+  }
+  return true;
 });
 
 // This method will be called when Electron has finished

@@ -94,7 +94,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onOpe
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-[600px] max-h-[80vh] flex flex-col bg-white dark:bg-[#1e1e1e] rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="w-[600px] max-h-[80vh] flex flex-col bg-white dark:bg-white dark:bg-gray-900 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
           <Search className="text-gray-400" size={20} />
           <input
@@ -118,7 +118,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onOpe
               {results.map(result => (
                 <button
                   key={result.path}
-                  className="flex flex-col items-start p-3 rounded hover:bg-gray-100 dark:hover:bg-[#2d2d2d] text-left group"
+                  className="flex flex-col items-start p-3 rounded hover:bg-gray-100 dark:hover:bg-gray-100 dark:bg-gray-800 text-left group"
                   onClick={() => {
                     onOpenFile(result.path);
                     onClose();
@@ -141,7 +141,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onOpe
           )}
         </div>
         
-        <div className="p-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#252526] text-xs text-gray-500 flex justify-between">
+        <div className="p-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-100 dark:bg-gray-800 text-xs text-gray-500 flex justify-between">
           <span>{results.length} results</span>
           <span>ESC to close</span>
         </div>

@@ -72,10 +72,16 @@ export const KanbanEmbed: React.FC<KanbanEmbedProps> = ({ dataString, onChange }
   });
 
   const isMounted = React.useRef(false);
+  const onChangeRef = React.useRef(onChange);
+  
+  // Keep onChange ref updated
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   useEffect(() => {
     if (isMounted.current) {
-      onChange(JSON.stringify(data));
+      onChangeRef.current(JSON.stringify(data));
     } else {
       isMounted.current = true;
     }

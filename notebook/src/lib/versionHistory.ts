@@ -12,14 +12,14 @@ const HISTORY_FOLDER = '.notebook-history';
 
 // Get the history folder path for a vault
 export const getHistoryFolderPath = (vaultPath: string): string => {
-  return `${vaultPath}\\${HISTORY_FOLDER}`;
+  return `${vaultPath}/${HISTORY_FOLDER}`;
 };
 
 // Get the history file path for a specific file
 const getHistoryFilePath = (vaultPath: string, filePath: string): string => {
   // Create a safe filename from the original path
-  const relativePath = filePath.replace(vaultPath, '').replace(/\\/g, '_').replace(/^_/, '');
-  return `${getHistoryFolderPath(vaultPath)}\\${relativePath}.history.json`;
+  const relativePath = filePath.replace(vaultPath, '').replace(/\//g, '_').replace(/^_/, '');
+  return `${getHistoryFolderPath(vaultPath)}/${relativePath}.history.json`;
 };
 
 // Ensure history folder exists

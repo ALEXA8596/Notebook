@@ -67,7 +67,7 @@ export const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({
     }
   };
 
-  const fileName = filePath.split('\\').pop() || filePath;
+  const fileName = filePath.split('/').pop() || filePath;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Version History - ${fileName}`}>

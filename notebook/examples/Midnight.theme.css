@@ -1,41 +1,70 @@
 /**
  * @name Midnight
  * @author Notebook Team
- * @description Deep blue midnight theme
+ * @description Deep midnight blue theme
  * @version 1.0.0
  * @website https://github.com/example/notebook
  * @cssvar --theme-bg #0f172a "Main background color"
- * @cssvar --theme-sidebar #1e293b "Sidebar background"
+ * @cssvar --theme-sidebar #020617 "Sidebar background"
  * @cssvar --theme-accent #3b82f6 "Accent/highlight color"
  * @cssvar --theme-text #e2e8f0 "Primary text color"
- * @cssvar --theme-text-muted #94a3b8 "Muted text color"
- * @cssvar --theme-border #172034 "Border color"
+ * @cssvar --theme-text-muted #64748b "Muted text color"
+ * @cssvar --theme-border #1e293b "Border color"
  */
 
 :root {
   --theme-bg: #0f172a;
-  --theme-sidebar: #1e293b;
+  --theme-sidebar: #020617;
   --theme-accent: #3b82f6;
   --theme-text: #e2e8f0;
-  --theme-text-muted: #94a3b8;
-  --theme-border: #172034;
+  --theme-text-muted: #64748b;
+  --theme-border: #1e293b;
+  
+  --background: #0f172a;
+  --foreground: #e2e8f0;
+  --border: #1e293b;
+  --accent: #3b82f6;
+  --muted: #64748b;
+  --card: #020617;
+  --panel: #020617;
+  color-scheme: dark;
 }
 
-body, .bg-white, .dark\:bg-gray-900 { background-color: var(--theme-bg) !important; }
-[class*="sidebar"], .bg-gray-100, .dark\:bg-gray-800 { background-color: var(--theme-sidebar) !important; }
+.dark {
+  --background: #0f172a;
+  --foreground: #e2e8f0;
+  --border: #1e293b;
+  --accent: #3b82f6;
+  --muted: #64748b;
+  --card: #020617;
+  --panel: #020617;
+}
 
-.text-gray-900, .dark\:text-gray-100, .text-gray-700, .dark\:text-gray-300 { color: var(--theme-text) !important; }
-.text-gray-500, .text-gray-400 { color: var(--theme-text-muted) !important; }
+body { background-color: #0f172a !important; color: #e2e8f0 !important; }
 
-.text-blue-500, .text-blue-600, .bg-blue-500 { color: var(--theme-accent) !important; }
-.bg-blue-500 { background-color: var(--theme-accent) !important; }
+.app-container, .app-main { background-color: var(--theme-bg) !important; color: var(--theme-text) !important; }
+.app-sidebar, .app-explorer { background-color: var(--theme-sidebar) !important; color: var(--theme-text) !important; }
 
-.border-gray-200, .border-gray-300, .dark\:border-gray-600 { border-color: var(--theme-border) !important; }
+textarea, input, .prose, [class*="editor"], [class*="Editor"] { background-color: var(--theme-bg) !important; color: var(--theme-text) !important; }
 
-::selection { background-color: var(--theme-accent); color: white; }
+.flexlayout__layout, .flexlayout__tab, .flexlayout__tabset, .flexlayout__tabset_content { background-color: var(--theme-bg) !important; color: var(--theme-text) !important; }
+.flexlayout__tab_button { background-color: var(--theme-sidebar) !important; color: var(--theme-text) !important; }
+.flexlayout__tab_button--selected { background-color: var(--theme-bg) !important; border-bottom-color: var(--theme-accent) !important; }
 
-/* Scrollbar */
+.prose, .prose h1, .prose h2, .prose h3, .prose h4, .prose p, .prose li { color: var(--theme-text) !important; }
+.prose code { background-color: var(--theme-sidebar) !important; color: #93c5fd !important; }
+.prose pre { background-color: var(--theme-sidebar) !important; }
+.prose a { color: var(--theme-accent) !important; }
+
+[class*="border-gray"], [class*="border-neutral"] { border-color: var(--theme-border) !important; }
+[class*="text-gray-9"], [class*="text-gray-8"], [class*="text-gray-7"], [class*="text-foreground"], .dark\:text-gray-100 { color: var(--theme-text) !important; }
+[class*="text-gray-5"], [class*="text-gray-4"], [class*="text-muted"] { color: var(--theme-text-muted) !important; }
+[class*="bg-white"], [class*="bg-gray-9"], [class*="bg-background"], .dark\:bg-gray-900 { background-color: var(--theme-bg) !important; }
+[class*="bg-gray-1"], [class*="bg-gray-8"], [class*="bg-card"] { background-color: var(--theme-sidebar) !important; }
+
+[class*="Modal"], [role="dialog"] { background-color: var(--theme-bg) !important; color: var(--theme-text) !important; }
+
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: var(--theme-bg); }
 ::-webkit-scrollbar-thumb { background: var(--theme-border); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: var(--theme-accent); }
+::selection { background-color: var(--theme-accent); color: #0f172a; }

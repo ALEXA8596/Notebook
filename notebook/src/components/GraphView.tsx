@@ -89,7 +89,7 @@ export const GraphView: React.FC<GraphViewProps> = ({ onNodeClick, width, height
   }, []);
 
   return (
-    <div ref={containerRef} className="w-full h-full bg-white dark:bg-[#1e1e1e] overflow-hidden relative">
+    <div ref={containerRef} className="w-full h-full bg-white dark:bg-gray-900 overflow-hidden relative">
       {/* Refresh button */}
       <button
         onClick={handleRefresh}
@@ -110,7 +110,7 @@ export const GraphView: React.FC<GraphViewProps> = ({ onNodeClick, width, height
         nodePointerAreaPaint={nodePointerAreaPaint}
         linkColor={() => isDark ? '#555' : '#ccc'}
         linkWidth={1.5}
-        backgroundColor={isDark ? '#1e1e1e' : '#ffffff'}
+        backgroundColor={isDark ? '#171717' : '#ffffff'}
         onNodeClick={(node: any) => onNodeClick(node.id)}
         cooldownTicks={100}
         d3AlphaDecay={0.02}

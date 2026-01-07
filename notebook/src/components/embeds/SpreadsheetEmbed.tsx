@@ -99,6 +99,12 @@ export const SpreadsheetEmbed: React.FC<SpreadsheetEmbedProps> = ({ dataString, 
   }, [colCount]);
 
   const isMounted = React.useRef(false);
+  const onChangeRef = React.useRef(onChange);
+  
+  // Keep onChange ref updated
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   useEffect(() => {
     // Load colCount from dataString
@@ -116,7 +122,7 @@ export const SpreadsheetEmbed: React.FC<SpreadsheetEmbedProps> = ({ dataString, 
 
   useEffect(() => {
     if (isMounted.current) {
-      onChange(JSON.stringify({ rows, colCount }));
+      onChangeRef.current(JSON.stringify({ rows, colCount }));
     } else {
       isMounted.current = true;
     }
@@ -168,7 +174,7 @@ export const SpreadsheetEmbed: React.FC<SpreadsheetEmbedProps> = ({ dataString, 
   };
 
   return (
-    <div className="w-full h-full flex flex-col overflow-hidden bg-white dark:bg-gray-900 text-black dark:text-white">
+    <div className="w-full h-full flex flex-col overflow-hidden bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       {/* Toolbar */}
       <div className="flex items-center gap-2 p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 shrink-0">
         <div className="flex items-center gap-1 border-r border-gray-300 dark:border-gray-600 pr-2">

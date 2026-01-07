@@ -61,7 +61,7 @@ const fuzzyMatch = (query: string, text: string): number => {
 };
 
 export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({ isOpen, onClose, onOpenFile }) => {
-  const { fileStructure } = useAppStore();
+  const { fileStructure, recentFiles } = useAppStore();
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -90,14 +90,33 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({ isOpen, onClose, o
   // Filter and sort by fuzzy match score
   const filteredFiles = useMemo(() => {
     if (!query.trim()) {
-      // Show recent/all files when no query
-      return allFiles.slice(0, 20);
+      // Show recent files first, then other files
+      const recentSet = new Set(recentFiles);
+      const recent = recentFiles
+        .map(path => allFiles.find(f => f.path === path))
+        .filter(Boolean) as FileItem[];
+      
+      const others = allFiles
+        .filter(f => !recentSet.has(f.path))
+        .slice(0, 20 - recent.length);
+      
+      return [...recent, ...others].slice(0, 20);
     }
     
     return allFiles
-      .map(file => ({ ...file, score: fuzzyMatch(query, file.name) }))
+      .map(file => ({ 
+        ...file, 
+        score: fuzzyMatch(query, file.name),
+        // Boost score for recent files
+        isRecent: recentFiles.includes(file.path)
+      }))
       .filter(file => file.score > 0)
-      .sort((a, b) => b.score - a.score)
+      .sort((a, b) => {
+        // Boost recent files slightly
+        const aBoost = a.isRecent ? 5 : 0;
+        const bBoost = b.isRecent ? 5 : 0;
+        return (b.score + bBoost) - (a.score + aBoost);
+      })
       .slice(0, 20);
   }, [query, allFiles]);
 
@@ -149,7 +168,7 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({ isOpen, onClose, o
       onClick={onClose}
     >
       <div 
-        className="w-[500px] max-h-[60vh] flex flex-col bg-white dark:bg-[#1e1e1e] rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+        className="w-[500px] max-h-[60vh] flex flex-col bg-white dark:bg-white dark:bg-gray-900 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         <div className="p-3 border-b border-gray-200 dark:border-gray-700">

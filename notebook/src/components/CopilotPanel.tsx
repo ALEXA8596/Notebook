@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useAppStore, FileEntry } from '../store/store';
 import { Send, Bot, User, Loader2, Settings, Trash2, FileText, FolderTree } from 'lucide-react';
 import { createTwoFilesPatch } from 'diff';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Message {
   id: string;
@@ -138,7 +140,7 @@ const flattenFileTree = (entries: FileEntry[], prefix = ''): string[] => {
   const result: string[] = [];
   for (const entry of entries) {
     const path = prefix ? `${prefix}/${entry.name}` : entry.name;
-    if (entry.type === 'folder') {
+    if (entry.isDirectory) {
       result.push(`📁 ${path}/`);
       if (entry.children) {
         result.push(...flattenFileTree(entry.children, path));
@@ -151,7 +153,7 @@ const flattenFileTree = (entries: FileEntry[], prefix = ''): string[] => {
 };
 
 export const CopilotPanel: React.FC = () => {
-  const { aiProviders, selectedAIProvider, activeFile, fileContents, fileStructure, setFileContent, markUnsavedChanges, viewedHistory, toolExecutionMode } = useAppStore();
+  const { aiProviders, selectedAIProvider, setSelectedAIProvider, activeFile, fileContents, fileStructure, setFileContent, setUnsaved, viewedHistory, toolExecutionMode } = useAppStore();
   const [messages, setMessages] = useState<Message[]>([]);
   const [pendingEdits, setPendingEdits] = useState<Record<string, { path: string; newContent: string; diff: string }>>({});
   const [expandedResearch, setExpandedResearch] = useState<Record<string, Set<number>>>({});
@@ -163,6 +165,13 @@ export const CopilotPanel: React.FC = () => {
   const [toolPrompt, setToolPrompt] = useState<{ visible: boolean; name?: string; resolve?: (choice: 'once'|'tool'|'all'|'deny') => void }>({ visible: false });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-select first provider if none selected but providers exist
+  useEffect(() => {
+    if (aiProviders.length > 0 && !selectedAIProvider) {
+      setSelectedAIProvider(aiProviders[0].id);
+    }
+  }, [aiProviders, selectedAIProvider, setSelectedAIProvider]);
 
   const selectedProvider = aiProviders.find(p => p.id === selectedAIProvider);
 
@@ -209,9 +218,7 @@ When helping with notes, be concise and helpful. If the user asks about their cu
     return prompt;
   }, [currentObservedFile, currentFileContent, fileList]);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  // Removed autoscroll - user controls scroll position manually
 
   // Tool execution handlers
   const executeToolCall = async (name: string, args: Record<string, string>): Promise<string> => {
@@ -262,7 +269,7 @@ When helping with notes, be concise and helpful. If the user asks about their cu
       case 'write_file': {
         try {
           setFileContent(args.path, args.content);
-          markUnsavedChanges(args.path);
+          setUnsaved(args.path, true);
           return `Successfully updated ${args.path}. The file has been marked as modified and will be saved.`;
         } catch (error) {
           return `Error writing file: ${error}`;
@@ -293,26 +300,6 @@ When helping with notes, be concise and helpful. If the user asks about their cu
       case 'create_folder': {
         try {
           await window.electronAPI.mkdir(args.path);
-          return `Created folder: ${args.path}`;
-        } catch (err) {
-          return `Error creating folder ${args.path}: ${(err as Error).message || err}`;
-        }
-      }
-      case 'read_folder': {
-        try {
-          const entries = await window.electronAPI.readDir(args.path);
-          const lines = entries.map((e: any) => e.isDirectory ? `📁 ${e.name}/` : `📄 ${e.name}`);
-          // Log tool usage in chat
-          setMessages(prev => [...prev, { id: `tool-${Date.now()}`, role: 'assistant', content: `[Tool used: read_folder ${args.path}]`, timestamp: new Date() }]);
-          return `Contents of ${args.path}:\n${lines.join('\n')}`;
-        } catch (err) {
-          return `Error reading folder ${args.path}: ${(err as Error).message || err}`;
-        }
-      }
-      case 'create_folder': {
-        try {
-          await window.electronAPI.mkdir(args.path);
-          setMessages(prev => [...prev, { id: `tool-${Date.now()}`, role: 'assistant', content: `[Tool used: create_folder ${args.path}]`, timestamp: new Date() }]);
           return `Created folder: ${args.path}`;
         } catch (err) {
           return `Error creating folder ${args.path}: ${(err as Error).message || err}`;
@@ -465,6 +452,50 @@ When helping with notes, be concise and helpful. If the user asks about their cu
     const baseUrl = provider.baseUrl || 'https://api.openai.com/v1';
     const model = provider.model || 'gpt-4o';
 
+    // Handle Google AI Studio / Gemini API
+    if (provider.name.toLowerCase().includes('gemini') || 
+        provider.name.toLowerCase().includes('google') ||
+        baseUrl.includes('generativelanguage.googleapis.com')) {
+      
+      // Google AI Studio uses a different API format
+      const googleModel = model || 'gemini-1.5-flash';
+      const googleUrl = `https://generativelanguage.googleapis.com/v1beta/models/${googleModel}:generateContent?key=${provider.apiKey}`;
+      
+      // Convert chat messages to Google's format, prepend system prompt as first user message
+      // (some models like gemma don't support systemInstruction)
+      const contents = [
+        { role: 'user', parts: [{ text: `System instructions: ${systemPrompt}` }] },
+        { role: 'model', parts: [{ text: 'Understood. I will follow these instructions.' }] },
+        ...chatMessages.map(m => ({
+          role: m.role === 'user' ? 'user' : 'model',
+          parts: [{ text: m.content }]
+        }))
+      ];
+      
+      const response = await fetch(googleUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: contents,
+          generationConfig: {
+            maxOutputTokens: 4096,
+          }
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Google AI API error');
+      }
+
+      const data = await response.json();
+      const candidate = data.candidates?.[0];
+      const textPart = candidate?.content?.parts?.find((p: any) => p.text);
+      return textPart?.text || 'No response';
+    }
+
     // Handle Anthropic API differently (with tools)
     if (provider.name === 'Anthropic' || baseUrl.includes('anthropic')) {
       const anthropicTools = TOOLS.map(t => ({
@@ -602,7 +633,6 @@ When helping with notes, be concise and helpful. If the user asks about their cu
     );
   }
 
- 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-900">
       {/* Tool permission prompt modal */}
@@ -611,38 +641,12 @@ When helping with notes, be concise and helpful. If the user asks about their cu
           <div className="bg-white dark:bg-gray-900 rounded-lg p-4 w-96">
             <h3 className="text-sm font-semibold mb-2">Tool Permission</h3>
             <p className="text-xs text-gray-600 dark:text-gray-300 mb-4">The assistant wants to use the tool <strong>{toolPrompt.name}</strong>. Allow?</p>
-            <div className="flex gap-2">
-              <button className="px-3 py-1.5 bg-green-500 text-white rounded" onClick={() => { toolPrompt.resolve && toolPrompt.resolve('once'); setToolPrompt({ visible: false }); }}>Allow once</button>
-              <button className="px-3 py-1.5 bg-blue-500 text-white rounded" onClick={() => { toolPrompt.resolve && toolPrompt.resolve('tool'); setToolPrompt({ visible: false }); }}>Allow this tool for session</button>
-              <button className="px-3 py-1.5 bg-purple-600 text-white rounded" onClick={() => { toolPrompt.resolve && toolPrompt.resolve('all'); setToolPrompt({ visible: false }); }}>Allow all tools this session</button>
-              <button className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 rounded" onClick={() => { toolPrompt.resolve && toolPrompt.resolve('deny'); setToolPrompt({ visible: false }); }}>Deny</button>
+            <div className="flex flex-wrap gap-2">
+              <button className="px-3 py-1.5 bg-green-500 text-white rounded text-xs" onClick={() => { toolPrompt.resolve && toolPrompt.resolve('once'); setToolPrompt({ visible: false }); }}>Allow once</button>
+              <button className="px-3 py-1.5 bg-blue-500 text-white rounded text-xs" onClick={() => { toolPrompt.resolve && toolPrompt.resolve('tool'); setToolPrompt({ visible: false }); }}>Allow this tool</button>
+              <button className="px-3 py-1.5 bg-purple-600 text-white rounded text-xs" onClick={() => { toolPrompt.resolve && toolPrompt.resolve('all'); setToolPrompt({ visible: false }); }}>Allow all</button>
+              <button className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 rounded text-xs" onClick={() => { toolPrompt.resolve && toolPrompt.resolve('deny'); setToolPrompt({ visible: false }); }}>Deny</button>
             </div>
-            {/* Render research results as closed dropdown tabs */}
-            {message.researchResults && message.researchResults.length > 0 && (
-              <div className="w-full max-w-[80%] mt-2 space-y-2">
-                {message.researchResults.map((r, i) => {
-                  const isOpen = !!(expandedResearch[message.id] && expandedResearch[message.id].has(i));
-                  return (
-                    <div key={i} className="border border-gray-200 dark:border-gray-700 rounded">
-                      <button
-                        className="w-full flex items-center justify-between px-3 py-2 text-left"
-                        onClick={() => toggleResearch(message.id, i)}
-                      >
-                        <div className="truncate text-sm text-blue-600 hover:underline">
-                          <a href={r.url} target="_blank" rel="noreferrer">{r.url}</a>
-                        </div>
-                        <div className="ml-2 text-xs text-gray-500">{isOpen ? '▾' : '▸'}</div>
-                      </button>
-                      {isOpen && (
-                        <div className="px-3 py-2 text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                          {r.snippet}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -711,51 +715,87 @@ When helping with notes, be concise and helpful. If the user asks about their cu
                 <Bot size={16} className="text-white" />
               </div>
             )}
-            <div
-              className={`max-w-[80%] px-4 py-2 rounded-lg ${
-                message.role === 'user'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-              }`}
-            >
-              <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-            </div>
-            {/* If message contains a pending edit, show Apply/Reject buttons */}
-            {message.pendingEditId && (
-              <div className="flex gap-2 mt-2">
-                <button
-                  className="px-2 py-1 bg-green-500 text-white rounded text-xs"
-                  onClick={async () => {
-                    const id = message.pendingEditId!;
-                    const pending = pendingEdits[id];
-                    if (!pending) return;
-                    try {
-                      await window.electronAPI.writeTextFile(pending.path, pending.newContent);
-                      // Update store and mark saved
-                      setFileContent(pending.path, pending.newContent);
-                      // remove pending
-                      setPendingEdits(prev => { const copy = { ...prev }; delete copy[id]; return copy; });
-                      setMessages(prev => [...prev, { id: `applied-${Date.now()}`, role: 'assistant', content: `Applied edit to ${pending.path}`, timestamp: new Date() }]);
-                    } catch (err) {
-                      setMessages(prev => [...prev, { id: `error-${Date.now()}`, role: 'assistant', content: `Failed to apply edit: ${(err as Error).message || err}`, timestamp: new Date() }]);
-                    }
-                  }}
-                >
-                  Apply
-                </button>
-                <button
-                  className="px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-xs"
-                  onClick={() => {
-                    const id = message.pendingEditId!;
-                    const pending = pendingEdits[id];
-                    setPendingEdits(prev => { const copy = { ...prev }; delete copy[id]; return copy; });
-                    setMessages(prev => [...prev, { id: `rejected-${Date.now()}`, role: 'assistant', content: `Rejected edit for ${pending?.path || ''}`, timestamp: new Date() }]);
-                  }}
-                >
-                  Reject
-                </button>
+            <div className="flex flex-col gap-2 max-w-[80%]">
+              <div
+                className={`px-4 py-2 rounded-lg ${
+                  message.role === 'user'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                }`}
+              >
+                {message.role === 'assistant' ? (
+                  <div className="text-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-pre:my-2 prose-code:bg-gray-200 dark:prose-code:bg-gray-700 prose-code:px-1 prose-code:rounded">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                )}
               </div>
-            )}
+              
+              {/* Render research results as collapsible sections */}
+              {message.researchResults && message.researchResults.length > 0 && (
+                <div className="space-y-2">
+                  {message.researchResults.map((r, i) => {
+                    const isOpen = !!(expandedResearch[message.id] && expandedResearch[message.id].has(i));
+                    return (
+                      <div key={i} className="border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-800">
+                        <button
+                          className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                          onClick={() => toggleResearch(message.id, i)}
+                        >
+                          <div className="truncate text-xs text-blue-600 dark:text-blue-400 hover:underline flex-1">
+                            <a href={r.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{r.url}</a>
+                          </div>
+                          <div className="ml-2 text-xs text-gray-500">{isOpen ? '▾' : '▸'}</div>
+                        </button>
+                        {isOpen && (
+                          <div className="px-3 py-2 text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap border-t border-gray-200 dark:border-gray-700 max-h-48 overflow-y-auto">
+                            {r.snippet}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              
+              {/* If message contains a pending edit, show Apply/Reject buttons */}
+              {message.pendingEditId && (
+                <div className="flex gap-2">
+                  <button
+                    className="px-2 py-1 bg-green-500 text-white rounded text-xs"
+                    onClick={async () => {
+                      const id = message.pendingEditId!;
+                      const pending = pendingEdits[id];
+                      if (!pending) return;
+                      try {
+                        await window.electronAPI.writeTextFile(pending.path, pending.newContent);
+                        // Update store and mark saved
+                        setFileContent(pending.path, pending.newContent);
+                        // remove pending
+                        setPendingEdits(prev => { const copy = { ...prev }; delete copy[id]; return copy; });
+                        setMessages(prev => [...prev, { id: `applied-${Date.now()}`, role: 'assistant', content: `Applied edit to ${pending.path}`, timestamp: new Date() }]);
+                      } catch (err) {
+                        setMessages(prev => [...prev, { id: `error-${Date.now()}`, role: 'assistant', content: `Failed to apply edit: ${(err as Error).message || err}`, timestamp: new Date() }]);
+                      }
+                    }}
+                  >
+                    Apply
+                  </button>
+                  <button
+                    className="px-2 py-1 bg-gray-200 dark:bg-gray-700 rounded text-xs"
+                    onClick={() => {
+                      const id = message.pendingEditId!;
+                      const pending = pendingEdits[id];
+                      setPendingEdits(prev => { const copy = { ...prev }; delete copy[id]; return copy; });
+                      setMessages(prev => [...prev, { id: `rejected-${Date.now()}`, role: 'assistant', content: `Rejected edit for ${pending?.path || ''}`, timestamp: new Date() }]);
+                    }}
+                  >
+                    Reject
+                  </button>
+                </div>
+              )}
+            </div>
             {message.role === 'user' && (
               <div className="flex-shrink-0 w-7 h-7 rounded-full bg-gray-500 flex items-center justify-center">
                 <User size={16} className="text-white" />

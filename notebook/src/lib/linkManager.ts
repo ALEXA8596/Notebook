@@ -30,13 +30,13 @@ export const extractLinks = (content: string): string[] => {
 
 // Get folder depth for priority (lower = higher in hierarchy)
 const getDepth = (path: string): number => {
-  return (path.match(/[\\/]/g) || []).length;
+  return (path.match(/\//g) || []).length;
 };
 
 // Get parent folder for grouping
 const getParentFolder = (path: string): string => {
-  const parts = path.split(/[\\/]/);
-  return parts.slice(0, -1).join('\\');
+  const parts = path.split('/');
+  return parts.slice(0, -1).join('/');
 };
 
 export const buildGraph = async (files: FileEntry[], fileContents?: Record<string, string>): Promise<GraphData> => {

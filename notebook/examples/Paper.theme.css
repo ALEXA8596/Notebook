@@ -1,10 +1,10 @@
 /**
  * @name Paper
  * @author Notebook Team
- * @description Clean light paper theme
+ * @description Clean paper-white theme for distraction-free writing
  * @version 1.0.0
  * @website https://github.com/example/notebook
- * @cssvar --theme-bg #ffffff "Main background color"
+ * @cssvar --theme-bg #fafafa "Main background color"
  * @cssvar --theme-sidebar #f5f5f5 "Sidebar background"
  * @cssvar --theme-accent #2563eb "Accent/highlight color"
  * @cssvar --theme-text #1f2937 "Primary text color"
@@ -13,29 +13,59 @@
  */
 
 :root {
-  --theme-bg: #ffffff;
+  --theme-bg: #fafafa;
   --theme-sidebar: #f5f5f5;
   --theme-accent: #2563eb;
   --theme-text: #1f2937;
   --theme-text-muted: #6b7280;
   --theme-border: #e5e7eb;
+  
+  --background: #fafafa;
+  --foreground: #1f2937;
+  --border: #e5e7eb;
+  --accent: #2563eb;
+  --muted: #6b7280;
+  --card: #f5f5f5;
+  --panel: #f5f5f5;
+  color-scheme: light;
 }
 
-body, .bg-white, .dark\:bg-gray-900 { background-color: var(--theme-bg) !important; }
-[class*="sidebar"], .bg-gray-100, .dark\:bg-gray-800 { background-color: var(--theme-sidebar) !important; }
+.dark {
+  --background: #fafafa;
+  --foreground: #1f2937;
+  --border: #e5e7eb;
+  --accent: #2563eb;
+  --muted: #6b7280;
+  --card: #f5f5f5;
+  --panel: #f5f5f5;
+  color-scheme: light;
+}
 
-.text-gray-900, .dark\:text-gray-100, .text-gray-700, .dark\:text-gray-300 { color: var(--theme-text) !important; }
-.text-gray-500, .text-gray-400 { color: var(--theme-text-muted) !important; }
+body { background-color: #fafafa !important; color: #1f2937 !important; }
 
-.text-blue-500, .text-blue-600, .bg-blue-500 { color: var(--theme-accent) !important; }
-.bg-blue-500 { background-color: var(--theme-accent) !important; }
+.app-container, .app-main { background-color: var(--theme-bg) !important; color: var(--theme-text) !important; }
+.app-sidebar, .app-explorer { background-color: var(--theme-sidebar) !important; color: var(--theme-text) !important; }
 
-.border-gray-200, .border-gray-300, .dark\:border-gray-600 { border-color: var(--theme-border) !important; }
+textarea, input, .prose, [class*="editor"], [class*="Editor"] { background-color: var(--theme-bg) !important; color: var(--theme-text) !important; }
 
-::selection { background-color: var(--theme-accent); color: white; }
+.flexlayout__layout, .flexlayout__tab, .flexlayout__tabset, .flexlayout__tabset_content { background-color: var(--theme-bg) !important; color: var(--theme-text) !important; }
+.flexlayout__tab_button { background-color: var(--theme-sidebar) !important; color: var(--theme-text) !important; }
+.flexlayout__tab_button--selected { background-color: var(--theme-bg) !important; border-bottom-color: var(--theme-accent) !important; }
 
-/* Scrollbar */
+.prose, .prose h1, .prose h2, .prose h3, .prose h4, .prose p, .prose li { color: var(--theme-text) !important; }
+.prose code { background-color: var(--theme-sidebar) !important; color: var(--theme-text) !important; }
+.prose pre { background-color: var(--theme-sidebar) !important; }
+.prose a { color: var(--theme-accent) !important; }
+
+[class*="border-gray"], [class*="border-neutral"] { border-color: var(--theme-border) !important; }
+[class*="text-gray-9"], [class*="text-gray-8"], [class*="text-gray-7"], [class*="text-foreground"], .dark\:text-gray-100 { color: var(--theme-text) !important; }
+[class*="text-gray-5"], [class*="text-gray-4"], [class*="text-muted"] { color: var(--theme-text-muted) !important; }
+[class*="bg-white"], [class*="bg-gray-9"], [class*="bg-background"], .dark\:bg-gray-900 { background-color: var(--theme-bg) !important; }
+[class*="bg-gray-1"], [class*="bg-gray-8"], [class*="bg-card"] { background-color: var(--theme-sidebar) !important; }
+
+[class*="Modal"], [role="dialog"] { background-color: var(--theme-bg) !important; color: var(--theme-text) !important; }
+
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: var(--theme-bg); }
 ::-webkit-scrollbar-thumb { background: var(--theme-border); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: var(--theme-accent); }
+::selection { background-color: var(--theme-accent); color: white; }
