@@ -29,6 +29,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onOpe
   }, [isOpen]);
 
   useEffect(() => {
+    let cancelled = false;
     const searchFiles = async () => {
       if (!query.trim()) {
         setResults([]);
@@ -82,12 +83,17 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onOpe
         }
       }
 
-      setResults(newResults);
-      setIsSearching(false);
+      if (!cancelled) {
+        setResults(newResults);
+        setIsSearching(false);
+      }
     };
 
     const timeoutId = setTimeout(searchFiles, 500); // Debounce
-    return () => clearTimeout(timeoutId);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
   }, [query, fileStructure]);
 
   if (!isOpen) return null;

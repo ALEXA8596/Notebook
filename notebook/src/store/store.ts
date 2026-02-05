@@ -648,6 +648,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       versionHistoryEnabled: state.versionHistoryEnabled,
       maxVersionsPerFile: state.maxVersionsPerFile,
       toolExecutionMode: state.toolExecutionMode,
+      copilotDisplayMode: state.copilotDisplayMode,
     };
     saveGeneralSettings(settings);
     return { autosaveEnabled: enabled };
@@ -659,6 +660,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       versionHistoryEnabled: state.versionHistoryEnabled,
       maxVersionsPerFile: state.maxVersionsPerFile,
       toolExecutionMode: state.toolExecutionMode,
+      copilotDisplayMode: state.copilotDisplayMode,
     };
     saveGeneralSettings(settings);
     return { autosaveInterval: interval };
@@ -672,6 +674,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       versionHistoryEnabled: enabled,
       maxVersionsPerFile: state.maxVersionsPerFile,
       toolExecutionMode: state.toolExecutionMode,
+      copilotDisplayMode: state.copilotDisplayMode,
     };
     saveGeneralSettings(settings);
     return { versionHistoryEnabled: enabled };
@@ -683,6 +686,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       versionHistoryEnabled: state.versionHistoryEnabled,
       maxVersionsPerFile: max,
       toolExecutionMode: state.toolExecutionMode,
+      copilotDisplayMode: state.copilotDisplayMode,
     };
     saveGeneralSettings(settings);
     return { maxVersionsPerFile: max };

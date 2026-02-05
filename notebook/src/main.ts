@@ -2,6 +2,8 @@ import { app, BrowserWindow, ipcMain, dialog, Menu, MenuItemConstructorOptions, 
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { watch, FSWatcher } from 'node:fs';
+import http from 'node:http';
+import { createHash, randomBytes } from 'node:crypto';
 import started from 'electron-squirrel-startup';
 
 // ==========================================
@@ -115,6 +117,76 @@ async function saveAddonState(state: AddonState): Promise<void> {
 let pluginWatcher: FSWatcher | null = null;
 let themeWatcher: FSWatcher | null = null;
 let vaultWatcher: FSWatcher | null = null;
+
+// ==========================================
+// Vault Path Guards
+// ==========================================
+
+interface VaultState {
+  approvedVaults: string[];
+  currentVaultPath: string | null;
+}
+
+const vaultStatePath = () => path.join(app.getPath('userData'), 'vault-state.json');
+let approvedVaults = new Set<string>();
+let currentVaultPath: string | null = null;
+const approvedExternalPaths = new Set<string>();
+const approvedExternalDirs = new Set<string>();
+
+const normalizePath = (p: string): string => path.resolve(p);
+const normalizeCompare = (p: string): string => (process.platform === 'win32' ? p.toLowerCase() : p);
+
+const isSubPath = (target: string, root: string): boolean => {
+  const relative = path.relative(normalizeCompare(root), normalizeCompare(target));
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+};
+
+const assertInVault = (targetPath: string): string => {
+  if (!currentVaultPath) {
+    throw new Error('No vault is currently open.');
+  }
+  const normalized = normalizePath(targetPath);
+  if (!isSubPath(normalized, currentVaultPath)) {
+    throw new Error('Path is outside the current vault.');
+  }
+  return normalized;
+};
+
+const isApprovedExternalPath = (targetPath: string): boolean => {
+  const normalized = normalizePath(targetPath);
+  return approvedExternalPaths.has(normalized);
+};
+
+const isApprovedExternalDir = (targetPath: string): boolean => {
+  const normalized = normalizePath(targetPath);
+  for (const dir of approvedExternalDirs) {
+    if (isSubPath(normalized, dir)) return true;
+  }
+  return false;
+};
+
+const loadVaultState = async (): Promise<void> => {
+  try {
+    const data = await fs.readFile(vaultStatePath(), 'utf-8');
+    const parsed = JSON.parse(data) as VaultState;
+    approvedVaults = new Set((parsed.approvedVaults || []).map(normalizePath));
+    currentVaultPath = parsed.currentVaultPath ? normalizePath(parsed.currentVaultPath) : null;
+    if (currentVaultPath) {
+      approvedVaults.add(currentVaultPath);
+    }
+  } catch {
+    approvedVaults = new Set();
+    currentVaultPath = null;
+  }
+};
+
+const saveVaultState = async (): Promise<void> => {
+  const state: VaultState = {
+    approvedVaults: Array.from(approvedVaults),
+    currentVaultPath,
+  };
+  await fs.writeFile(vaultStatePath(), JSON.stringify(state, null, 2), 'utf-8');
+};
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -322,6 +394,153 @@ const createWindow = () => {
 // IPC Handlers for File System Operations
 // ==========================================
 
+const base64UrlEncode = (buffer: Buffer): string => {
+  return buffer
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+};
+
+const createPkcePair = () => {
+  const verifier = base64UrlEncode(randomBytes(32));
+  const challenge = base64UrlEncode(createHash('sha256').update(verifier).digest());
+  return { verifier, challenge };
+};
+
+const startGoogleAuthFlow = async (clientId: string, scopes: string[], clientSecret?: string) => {
+  if (!clientId) {
+    throw new Error('Missing Google client ID');
+  }
+
+  return new Promise<{ access_token: string; refresh_token?: string; expires_at: number; token_type: string }>((resolve, reject) => {
+    let redirectUri = '';
+    let baseOrigin = 'http://127.0.0.1';
+    let verifier = '';
+
+    const server = http.createServer(async (req, res) => {
+      try {
+        if (!req.url) {
+          res.writeHead(400);
+          res.end('Bad Request');
+          return;
+        }
+
+        const url = new URL(req.url, baseOrigin);
+        if (url.pathname !== '/oauth/callback') {
+          res.writeHead(404);
+          res.end('Not Found');
+          return;
+        }
+
+        const error = url.searchParams.get('error');
+        if (error) {
+          res.writeHead(200, { 'Content-Type': 'text/html' });
+          res.end('<h3>Authentication failed. You can close this window.</h3>');
+          server.close();
+          reject(new Error(error));
+          return;
+        }
+
+        const code = url.searchParams.get('code');
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end('<h3>Authentication complete. You can close this window.</h3>');
+        server.close();
+
+        if (!code) {
+          reject(new Error('Missing authorization code'));
+          return;
+        }
+
+        const body = new URLSearchParams({
+          client_id: clientId,
+          code,
+          code_verifier: verifier,
+          redirect_uri: redirectUri,
+          grant_type: 'authorization_code',
+        });
+        if (clientSecret) {
+          body.set('client_secret', clientSecret);
+        }
+
+        const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: body.toString(),
+        });
+
+        const data = await tokenResponse.json().catch(() => ({}));
+        if (!tokenResponse.ok) {
+          reject(new Error(data.error_description || data.error || 'Token exchange failed'));
+          return;
+        }
+
+        resolve({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+          token_type: data.token_type || 'Bearer',
+          expires_at: Date.now() + (data.expires_in * 1000),
+        });
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error('Authentication failed'));
+      }
+    });
+
+    server.listen(0, '127.0.0.1', async () => {
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        server.close();
+        reject(new Error('Failed to start auth server'));
+        return;
+      }
+
+      baseOrigin = `http://127.0.0.1:${address.port}`;
+      redirectUri = `${baseOrigin}/oauth/callback`;
+      const pkce = createPkcePair();
+      verifier = pkce.verifier;
+
+      const params = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        scope: scopes.join(' '),
+        include_granted_scopes: 'true',
+        access_type: 'offline',
+        prompt: 'consent',
+        code_challenge: pkce.challenge,
+        code_challenge_method: 'S256',
+      });
+
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+      await shell.openExternal(authUrl);
+    });
+  });
+};
+
+ipcMain.handle('auth:googleStart', async (_event, args: { clientId: string; scopes: string[]; clientSecret?: string }) => {
+  return startGoogleAuthFlow(args.clientId, args.scopes, args.clientSecret);
+});
+
+// Open vault dialog (sets current vault)
+ipcMain.handle('dialog:openVault', async () => {
+  try {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+    });
+    if (result.canceled) {
+      return null;
+    }
+    const selected = normalizePath(result.filePaths[0]);
+    approvedVaults.add(selected);
+    currentVaultPath = selected;
+    await saveVaultState();
+    return selected;
+  } catch (error) {
+    console.error('Failed to open vault dialog:', error);
+    throw error;
+  }
+});
+
 // Open folder dialog
 ipcMain.handle('dialog:openFolder', async () => {
   try {
@@ -338,10 +557,29 @@ ipcMain.handle('dialog:openFolder', async () => {
   }
 });
 
+// Open folder dialog for move-to (approve external destination)
+ipcMain.handle('dialog:openFolderForMove', async () => {
+  try {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+    });
+    if (result.canceled) {
+      return null;
+    }
+    const selected = normalizePath(result.filePaths[0]);
+    approvedExternalDirs.add(selected);
+    return selected;
+  } catch (error) {
+    console.error('Failed to open folder dialog for move:', error);
+    throw error;
+  }
+});
+
 // Read directory contents
 ipcMain.handle('fs:readDir', async (_, dirPath: string) => {
   try {
-    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    const safePath = assertInVault(dirPath);
+    const entries = await fs.readdir(safePath, { withFileTypes: true });
     return entries.map((entry) => ({
       name: entry.name,
       isDirectory: entry.isDirectory(),
@@ -355,7 +593,8 @@ ipcMain.handle('fs:readDir', async (_, dirPath: string) => {
 // Read text file
 ipcMain.handle('fs:readTextFile', async (_, filePath: string) => {
   try {
-    return await fs.readFile(filePath, 'utf-8');
+    const safePath = assertInVault(filePath);
+    return await fs.readFile(safePath, 'utf-8');
   } catch (error) {
     console.error('Failed to read text file:', filePath, error);
     throw error;
@@ -365,7 +604,8 @@ ipcMain.handle('fs:readTextFile', async (_, filePath: string) => {
 // Read binary file (for PDFs, etc.)
 ipcMain.handle('fs:readFile', async (_, filePath: string) => {
   try {
-    const buffer = await fs.readFile(filePath);
+    const safePath = assertInVault(filePath);
+    const buffer = await fs.readFile(safePath);
     return buffer;
   } catch (error) {
     console.error('Failed to read file:', filePath, error);
@@ -376,7 +616,8 @@ ipcMain.handle('fs:readFile', async (_, filePath: string) => {
 // Write text file
 ipcMain.handle('fs:writeTextFile', async (_, filePath: string, content: string) => {
   try {
-    await fs.writeFile(filePath, content, 'utf-8');
+    const safePath = assertInVault(filePath);
+    await fs.writeFile(safePath, content, 'utf-8');
   } catch (error) {
     console.error('Failed to write text file:', filePath, error);
     throw error;
@@ -386,7 +627,8 @@ ipcMain.handle('fs:writeTextFile', async (_, filePath: string, content: string) 
 // Write binary file
 ipcMain.handle('fs:writeFile', async (_, filePath: string, data: Uint8Array) => {
   try {
-    await fs.writeFile(filePath, data);
+    const safePath = assertInVault(filePath);
+    await fs.writeFile(safePath, data);
   } catch (error) {
     console.error('Failed to write file:', filePath, error);
     throw error;
@@ -396,7 +638,8 @@ ipcMain.handle('fs:writeFile', async (_, filePath: string, data: Uint8Array) => 
 // Create directory
 ipcMain.handle('fs:mkdir', async (_, dirPath: string) => {
   try {
-    await fs.mkdir(dirPath, { recursive: true });
+    const safePath = assertInVault(dirPath);
+    await fs.mkdir(safePath, { recursive: true });
   } catch (error) {
     console.error('Failed to create directory:', dirPath, error);
     throw error;
@@ -406,7 +649,8 @@ ipcMain.handle('fs:mkdir', async (_, dirPath: string) => {
 // Check if path exists
 ipcMain.handle('fs:exists', async (_, filePath: string) => {
   try {
-    await fs.access(filePath);
+    const safePath = assertInVault(filePath);
+    await fs.access(safePath);
     return true;
   } catch {
     return false;
@@ -423,7 +667,9 @@ ipcMain.handle('dialog:openFile', async (_, options: { filters?: { name: string;
     if (result.canceled) {
       return null;
     }
-    return result.filePaths[0];
+    const selected = normalizePath(result.filePaths[0]);
+    approvedExternalPaths.add(selected);
+    return selected;
   } catch (error) {
     console.error('Failed to open file dialog:', error);
     throw error;
@@ -433,7 +679,13 @@ ipcMain.handle('dialog:openFile', async (_, options: { filters?: { name: string;
 // Copy file
 ipcMain.handle('fs:copyFile', async (_, src: string, dest: string) => {
   try {
-    await fs.copyFile(src, dest);
+    const safeDest = assertInVault(dest);
+    const normalizedSrc = normalizePath(src);
+    const srcAllowed = currentVaultPath ? isSubPath(normalizedSrc, currentVaultPath) : false;
+    if (!srcAllowed && !isApprovedExternalPath(normalizedSrc)) {
+      throw new Error('Source path is not approved for copying.');
+    }
+    await fs.copyFile(normalizedSrc, safeDest);
   } catch (error) {
     console.error('Failed to copy file:', src, dest, error);
     throw error;
@@ -443,8 +695,27 @@ ipcMain.handle('fs:copyFile', async (_, src: string, dest: string) => {
 // Move/rename file
 ipcMain.handle('fs:moveFile', async (_, src: string, dest: string) => {
   try {
-    await fs.rename(src, dest);
+    const safeSrc = assertInVault(src);
+    const normalizedDest = normalizePath(dest);
+    const destAllowed = (currentVaultPath && isSubPath(normalizedDest, currentVaultPath)) || isApprovedExternalDir(normalizedDest);
+    if (!destAllowed) {
+      throw new Error('Destination path is not approved for moving.');
+    }
+    await fs.rename(safeSrc, normalizedDest);
   } catch (error) {
+    const err = error as NodeJS.ErrnoException;
+    if (err.code === 'EXDEV') {
+      try {
+        const safeSrc = assertInVault(src);
+        const normalizedDest = normalizePath(dest);
+        await fs.cp(safeSrc, normalizedDest, { recursive: true });
+        await fs.rm(safeSrc, { recursive: true, force: true });
+        return;
+      } catch (copyErr) {
+        console.error('Failed to move file (copy fallback):', src, dest, copyErr);
+        throw copyErr;
+      }
+    }
     console.error('Failed to move file:', src, dest, error);
     throw error;
   }
@@ -453,7 +724,8 @@ ipcMain.handle('fs:moveFile', async (_, src: string, dest: string) => {
 // Delete file or directory
 ipcMain.handle('fs:deleteFile', async (_, filePath: string) => {
   try {
-    await fs.rm(filePath, { recursive: true, force: true });
+    const safePath = assertInVault(filePath);
+    await fs.rm(safePath, { recursive: true, force: true });
   } catch (error) {
     console.error('Failed to delete file:', filePath, error);
     throw error;
@@ -464,11 +736,24 @@ ipcMain.handle('fs:deleteFile', async (_, filePath: string) => {
 ipcMain.handle('fs:showInExplorer', async (_, filePath: string) => {
   try {
     const { shell } = await import('electron');
-    shell.showItemInFolder(filePath);
+    const safePath = assertInVault(filePath);
+    shell.showItemInFolder(safePath);
   } catch (error) {
     console.error('Failed to show in explorer:', filePath, error);
     throw error;
   }
+});
+
+// Approve external paths (used for drag/drop import)
+ipcMain.handle('fs:approveExternalPaths', async (_, paths: string[]) => {
+  for (const p of paths) {
+    try {
+      approvedExternalPaths.add(normalizePath(p));
+    } catch {
+      // ignore invalid paths
+    }
+  }
+  return true;
 });
 
 // ==========================================
@@ -667,8 +952,32 @@ ipcMain.handle('addons:openFolder', async (_, type: 'plugins' | 'themes') => {
 // Vault File Watcher
 // ==========================================
 
+// Set current vault (only if approved)
+ipcMain.handle('vault:setCurrent', async (_, vaultPath: string) => {
+  const normalized = normalizePath(vaultPath);
+  if (!approvedVaults.has(normalized)) {
+    return false;
+  }
+  currentVaultPath = normalized;
+  await saveVaultState();
+  return true;
+});
+
+// Get vault status (approved list + current vault)
+ipcMain.handle('vault:getStatus', async () => {
+  return {
+    currentVaultPath,
+    approvedVaults: Array.from(approvedVaults),
+  };
+});
+
 // Start watching a vault folder for changes
 ipcMain.handle('vault:startWatching', async (_, vaultPath: string) => {
+  const normalized = normalizePath(vaultPath);
+  if (!currentVaultPath || !isSubPath(normalized, currentVaultPath)) {
+    console.error('Denied vault watcher start: path outside current vault');
+    return false;
+  }
   // Stop existing watcher
   if (vaultWatcher) {
     vaultWatcher.close();
@@ -676,13 +985,13 @@ ipcMain.handle('vault:startWatching', async (_, vaultPath: string) => {
   }
 
   try {
-    vaultWatcher = watch(vaultPath, { recursive: true }, (eventType, filename) => {
+    vaultWatcher = watch(normalized, { recursive: true }, (eventType, filename) => {
       if (filename) {
         // Ignore hidden files and temp files
         if (filename.startsWith('.') || filename.includes('~') || filename.endsWith('.tmp')) {
           return;
         }
-        mainWindow?.webContents.send('vault:fileChanged', { eventType, filename, vaultPath });
+        mainWindow?.webContents.send('vault:fileChanged', { eventType, filename, vaultPath: normalized });
       }
     });
     return true;
@@ -704,7 +1013,10 @@ ipcMain.handle('vault:stopWatching', async () => {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on('ready', createWindow);
+app.on('ready', async () => {
+  await loadVaultState();
+  createWindow();
+});
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits

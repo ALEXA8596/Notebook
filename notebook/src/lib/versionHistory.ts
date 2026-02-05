@@ -10,6 +10,16 @@ export interface FileVersion {
 
 const HISTORY_FOLDER = '.notebook-history';
 
+// Simple FNV-1a hash for stable filenames
+const hashString = (input: string): string => {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = (hash * 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+};
+
 // Get the history folder path for a vault
 export const getHistoryFolderPath = (vaultPath: string): string => {
   return `${vaultPath}/${HISTORY_FOLDER}`;
@@ -18,8 +28,13 @@ export const getHistoryFolderPath = (vaultPath: string): string => {
 // Get the history file path for a specific file
 const getHistoryFilePath = (vaultPath: string, filePath: string): string => {
   // Create a safe filename from the original path
-  const relativePath = filePath.replace(vaultPath, '').replace(/\//g, '_').replace(/^_/, '');
-  return `${getHistoryFolderPath(vaultPath)}/${relativePath}.history.json`;
+  const relativePath = filePath.replace(vaultPath, '');
+  const safeBase = relativePath
+    .replace(/[\\/]+/g, '_')
+    .replace(/[:*?"<>|]/g, '_')
+    .replace(/^_+/, '') || 'root';
+  const hash = hashString(filePath);
+  return `${getHistoryFolderPath(vaultPath)}/${safeBase}-${hash}.history.json`;
 };
 
 // Ensure history folder exists

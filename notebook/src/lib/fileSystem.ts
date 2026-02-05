@@ -31,6 +31,10 @@ export const openFolder = async (): Promise<string | null> => {
   return await window.electronAPI.openFolder();
 };
 
+export const openVault = async (): Promise<string | null> => {
+  return await window.electronAPI.openVault();
+};
+
 export const loadFileStructure = async (path: string, recursive: boolean = true, showHidden: boolean = false): Promise<FileEntry[]> => {
   const entries = await window.electronAPI.readDir(path);
   const result: FileEntry[] = [];

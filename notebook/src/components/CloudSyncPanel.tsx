@@ -6,9 +6,8 @@ import {
 } from 'lucide-react';
 import {
   isConnected,
-  getAuthUrl,
-  parseAuthCallback,
   storeToken,
+  startGoogleAuth,
   getSyncStatus,
   getUserInfo,
   disconnect,
@@ -39,6 +38,7 @@ export const CloudSyncPanel: React.FC<CloudSyncPanelProps> = ({ onClose }) => {
   const [backupFiles, setBackupFiles] = useState<DriveFile[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [clientId, setClientId] = useState(() => localStorage.getItem('google-client-id') || '');
+  const [clientSecret, setClientSecret] = useState(() => localStorage.getItem('google-client-secret') || '');
   const [error, setError] = useState<string | null>(null);
   
   // Load user info on mount
@@ -64,74 +64,25 @@ export const CloudSyncPanel: React.FC<CloudSyncPanelProps> = ({ onClose }) => {
     loadUserInfo();
   }, []);
   
-  // Listen for OAuth callback
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data.type === 'oauth-callback') {
-        const token = parseAuthCallback(event.data.hash);
-        if (token) {
-          storeToken(token);
-          storeSyncStatus({ isConnected: true });
-          setConnected(true);
-          getUserInfo().then(setUserInfo);
-        }
-      }
-    };
-    
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
-  
-  // Track auth check interval for cleanup
-  const authCheckIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
-  
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (authCheckIntervalRef.current) {
-        clearInterval(authCheckIntervalRef.current);
-      }
-    };
-  }, []);
-  
   // Handle connect
-  const handleConnect = () => {
+  const handleConnect = async () => {
     if (!clientId) {
       setShowSettings(true);
       setError('Please enter your Google Client ID first');
       return;
     }
-    
-    const authUrl = getAuthUrl(clientId);
-    const authWindow = window.open(authUrl, 'Google Auth', 'width=500,height=600');
-    
-    // Clear any existing interval
-    if (authCheckIntervalRef.current) {
-      clearInterval(authCheckIntervalRef.current);
+
+    setError(null);
+    try {
+      const token = await startGoogleAuth(clientId, clientSecret || undefined);
+      storeToken(token);
+      storeSyncStatus({ isConnected: true });
+      setConnected(true);
+      const info = await getUserInfo();
+      setUserInfo(info);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Authentication failed');
     }
-    
-    // Check for callback
-    authCheckIntervalRef.current = setInterval(() => {
-      try {
-        if (authWindow?.location.hash) {
-          window.postMessage({ type: 'oauth-callback', hash: authWindow.location.hash }, '*');
-          authWindow.close();
-          if (authCheckIntervalRef.current) {
-            clearInterval(authCheckIntervalRef.current);
-            authCheckIntervalRef.current = null;
-          }
-        }
-      } catch (e) {
-        // Cross-origin error, window still on Google
-      }
-      
-      if (authWindow?.closed) {
-        if (authCheckIntervalRef.current) {
-          clearInterval(authCheckIntervalRef.current);
-          authCheckIntervalRef.current = null;
-        }
-      }
-    }, 500);
   };
   
   // Handle disconnect
@@ -205,6 +156,7 @@ export const CloudSyncPanel: React.FC<CloudSyncPanelProps> = ({ onClose }) => {
   // Save client ID
   const handleSaveClientId = () => {
     localStorage.setItem('google-client-id', clientId);
+    localStorage.setItem('google-client-secret', clientSecret);
     setShowSettings(false);
     setError(null);
   };
@@ -255,6 +207,19 @@ export const CloudSyncPanel: React.FC<CloudSyncPanelProps> = ({ onClose }) => {
                 />
                 <p className="text-xs text-gray-400 mt-1">
                   Get this from Google Cloud Console → APIs & Services → Credentials
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Google Client Secret (optional)</label>
+                <input
+                  type="password"
+                  value={clientSecret}
+                  onChange={e => setClientSecret(e.target.value)}
+                  placeholder="Only needed for Web client IDs"
+                  className="w-full px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Recommended: create a Desktop app OAuth client so no secret is required.
                 </p>
               </div>
               <button

@@ -21,7 +21,7 @@ export interface SyncStatus {
 
 // OAuth2 configuration - these would be set via environment or settings
 const GOOGLE_CLIENT_ID = ''; // Set via settings
-const GOOGLE_REDIRECT_URI = 'http://localhost:3000/oauth/callback';
+const GOOGLE_REDIRECT_URI_FALLBACK = 'http://localhost:3000/oauth/callback';
 const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/drive.file',
   'https://www.googleapis.com/auth/drive.appdata',
@@ -30,6 +30,7 @@ const GOOGLE_SCOPES = [
 // Storage keys
 const TOKEN_KEY = 'google-drive-token';
 const SYNC_STATUS_KEY = 'google-drive-sync-status';
+const PKCE_VERIFIER_KEY = 'google-drive-pkce-verifier';
 
 interface TokenData {
   access_token: string;
@@ -37,6 +38,43 @@ interface TokenData {
   expires_at: number;
   token_type: string;
 }
+
+interface AuthCallbackResult {
+  token?: TokenData;
+  code?: string;
+  error?: string;
+}
+
+// Resolve redirect URI for OAuth (must be registered in Google Cloud Console)
+export const getRedirectUri = (): string => {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}/oauth/callback`;
+  }
+  return GOOGLE_REDIRECT_URI_FALLBACK;
+};
+
+const base64UrlEncode = (buffer: Uint8Array): string => {
+  let binary = '';
+  buffer.forEach(byte => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+};
+
+const createCodeVerifier = (): string => {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return base64UrlEncode(array);
+};
+
+const createCodeChallenge = async (verifier: string): Promise<string> => {
+  const data = new TextEncoder().encode(verifier);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return base64UrlEncode(new Uint8Array(digest));
+};
 
 // Load stored token
 export const getStoredToken = (): TokenData | null => {
@@ -91,37 +129,105 @@ export const storeSyncStatus = (status: Partial<SyncStatus>) => {
   localStorage.setItem(SYNC_STATUS_KEY, JSON.stringify(updated));
 };
 
-// Generate OAuth URL
-export const getAuthUrl = (clientId: string): string => {
+// Generate OAuth URL (Authorization Code with PKCE)
+export const getAuthUrl = async (clientId: string): Promise<string> => {
+  const codeVerifier = createCodeVerifier();
+  const codeChallenge = await createCodeChallenge(codeVerifier);
+  localStorage.setItem(PKCE_VERIFIER_KEY, codeVerifier);
+
   const params = new URLSearchParams({
     client_id: clientId,
-    redirect_uri: GOOGLE_REDIRECT_URI,
-    response_type: 'token',
+    redirect_uri: getRedirectUri(),
+    response_type: 'code',
     scope: GOOGLE_SCOPES.join(' '),
     include_granted_scopes: 'true',
+    access_type: 'offline',
+    prompt: 'consent',
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
   });
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 };
 
-// Parse OAuth callback hash
-export const parseAuthCallback = (hash: string): TokenData | null => {
+// Start OAuth flow via system browser + loopback redirect (Electron main)
+export const startGoogleAuth = async (clientId: string, clientSecret?: string): Promise<TokenData> => {
+  if (!window?.electronAPI?.startGoogleAuth) {
+    throw new Error('Google authentication is not available in this environment');
+  }
+  return window.electronAPI.startGoogleAuth(clientId, GOOGLE_SCOPES, clientSecret);
+};
+
+// Parse OAuth callback (hash or query string)
+export const parseAuthCallback = (hash: string, search: string = ''): AuthCallbackResult => {
   try {
-    const params = new URLSearchParams(hash.replace('#', ''));
-    const accessToken = params.get('access_token');
-    const expiresIn = params.get('expires_in');
-    const tokenType = params.get('token_type');
+    const hashParams = new URLSearchParams(hash.replace('#', ''));
+    const searchParams = new URLSearchParams(search.replace('?', ''));
+
+    const error = hashParams.get('error') || searchParams.get('error');
+    if (error) {
+      return { error };
+    }
+
+    const accessToken = hashParams.get('access_token');
+    const expiresIn = hashParams.get('expires_in');
+    const tokenType = hashParams.get('token_type');
     
     if (accessToken && expiresIn) {
       return {
-        access_token: accessToken,
-        token_type: tokenType || 'Bearer',
-        expires_at: Date.now() + (parseInt(expiresIn) * 1000),
+        token: {
+          access_token: accessToken,
+          token_type: tokenType || 'Bearer',
+          expires_at: Date.now() + (parseInt(expiresIn) * 1000),
+        },
       };
+    }
+
+    const code = searchParams.get('code');
+    if (code) {
+      return { code };
     }
   } catch (e) {
     console.error('Failed to parse auth callback', e);
   }
-  return null;
+  return {};
+};
+
+// Exchange authorization code for tokens (PKCE)
+export const exchangeAuthCode = async (clientId: string, code: string): Promise<TokenData> => {
+  const codeVerifier = localStorage.getItem(PKCE_VERIFIER_KEY);
+  if (!codeVerifier) {
+    throw new Error('Missing PKCE code verifier');
+  }
+
+  const body = new URLSearchParams({
+    client_id: clientId,
+    code,
+    code_verifier: codeVerifier,
+    redirect_uri: getRedirectUri(),
+    grant_type: 'authorization_code',
+  });
+
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: body.toString(),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error_description || data.error || 'Token exchange failed');
+  }
+
+  localStorage.removeItem(PKCE_VERIFIER_KEY);
+
+  return {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    token_type: data.token_type || 'Bearer',
+    expires_at: Date.now() + (data.expires_in * 1000),
+  };
 };
 
 // Make authenticated API request

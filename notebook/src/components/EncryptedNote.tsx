@@ -9,6 +9,7 @@ import {
   checkPasswordStrength,
   PasswordStrength 
 } from '../lib/encryption';
+import { useAppStore } from '../store/store';
 import clsx from 'clsx';
 
 interface EncryptedNoteModalProps {
@@ -268,10 +269,11 @@ interface AutoLockProviderProps {
 
 export const AutoLockProvider: React.FC<AutoLockProviderProps> = ({ 
   children, 
-  inactivityTimeout = 5 * 60 * 1000 // 5 minutes default
+  inactivityTimeout
 }) => {
-  const [lockedNotes, setLockedNotes] = useState<Set<string>>(new Set());
+  const { autoLockTimeout, lockAllNotes } = useAppStore();
   const [lastActivity, setLastActivity] = useState(Date.now());
+  const effectiveTimeout = inactivityTimeout ?? (autoLockTimeout * 60 * 1000);
   
   // Track user activity
   useEffect(() => {
@@ -288,14 +290,15 @@ export const AutoLockProvider: React.FC<AutoLockProviderProps> = ({
   // Auto-lock check
   useEffect(() => {
     const interval = setInterval(() => {
-      if (Date.now() - lastActivity > inactivityTimeout) {
-        // Dispatch event to lock all encrypted notes
-        window.dispatchEvent(new CustomEvent('auto-lock-notes'));
+      if (Date.now() - lastActivity > effectiveTimeout) {
+        lockAllNotes();
+        // Prevent repeated locks while still inactive
+        setLastActivity(Date.now());
       }
     }, 30000); // Check every 30 seconds
     
     return () => clearInterval(interval);
-  }, [lastActivity, inactivityTimeout]);
+  }, [lastActivity, effectiveTimeout, lockAllNotes]);
   
   return <>{children}</>;
 };

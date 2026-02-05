@@ -152,6 +152,26 @@ const flattenFileTree = (entries: FileEntry[], prefix = ''): string[] => {
   return result;
 };
 
+// Helper to flatten file structure to file paths
+const flattenFilePaths = (entries: FileEntry[]): string[] => {
+  const files: string[] = [];
+  const traverse = (items: FileEntry[]) => {
+    for (const entry of items) {
+      if (entry.isDirectory && entry.children) {
+        traverse(entry.children);
+      } else {
+        files.push(entry.path);
+      }
+    }
+  };
+  traverse(entries);
+  return files;
+};
+
+const isBinaryFile = (path: string): boolean => {
+  return /\.(png|jpe?g|gif|pdf|ico|webp|svg|mp3|mp4|mov|zip|rar|7z)$/i.test(path);
+};
+
 export const CopilotPanel: React.FC = () => {
   const { aiProviders, selectedAIProvider, setSelectedAIProvider, activeFile, fileContents, fileStructure, setFileContent, setUnsaved, viewedHistory, toolExecutionMode } = useAppStore();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -260,17 +280,18 @@ When helping with notes, be concise and helpful. If the user asks about their cu
         }
         // Try to read from disk
         try {
-          const content = await window.electronAPI.readFile(args.path);
-          return `File content of ${args.path}:\n\`\`\`\n${content}\n\`\`\``;
+          const diskContent = await window.electronAPI.readTextFile(args.path);
+          return `File content of ${args.path}:\n\`\`\`\n${diskContent}\n\`\`\``;
         } catch {
           return `Error: File not found: ${args.path}`;
         }
       }
       case 'write_file': {
         try {
+          await window.electronAPI.writeTextFile(args.path, args.content);
           setFileContent(args.path, args.content);
-          setUnsaved(args.path, true);
-          return `Successfully updated ${args.path}. The file has been marked as modified and will be saved.`;
+          setUnsaved(args.path, false);
+          return `Successfully updated ${args.path}.`;
         } catch (error) {
           return `Error writing file: ${error}`;
         }
@@ -278,14 +299,25 @@ When helping with notes, be concise and helpful. If the user asks about their cu
       case 'search_vault': {
         const query = args.query.toLowerCase();
         const results: string[] = [];
-        for (const [path, content] of Object.entries(fileContents)) {
+        const files = flattenFilePaths(fileStructure);
+        for (const path of files) {
+          if (isBinaryFile(path)) continue;
+          let content = fileContents[path];
+          if (content === undefined) {
+            try {
+              content = await window.electronAPI.readTextFile(path);
+            } catch {
+              continue;
+            }
+          }
           if (path.toLowerCase().includes(query) || content.toLowerCase().includes(query)) {
             const preview = content.substring(0, 200).replace(/\n/g, ' ');
             results.push(`- ${path}: ${preview}...`);
+            if (results.length >= 20) break;
           }
         }
         return results.length > 0 
-          ? `Found ${results.length} matches:\n${results.slice(0, 10).join('\n')}`
+          ? `Found ${results.length} matches:\n${results.slice(0, 20).join('\n')}`
           : `No files found matching "${args.query}"`;
       }
       case 'read_folder': {
@@ -772,6 +804,7 @@ When helping with notes, be concise and helpful. If the user asks about their cu
                         await window.electronAPI.writeTextFile(pending.path, pending.newContent);
                         // Update store and mark saved
                         setFileContent(pending.path, pending.newContent);
+                        setUnsaved(pending.path, false);
                         // remove pending
                         setPendingEdits(prev => { const copy = { ...prev }; delete copy[id]; return copy; });
                         setMessages(prev => [...prev, { id: `applied-${Date.now()}`, role: 'assistant', content: `Applied edit to ${pending.path}`, timestamp: new Date() }]);

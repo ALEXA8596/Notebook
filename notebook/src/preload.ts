@@ -8,6 +8,8 @@ import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 contextBridge.exposeInMainWorld('electronAPI', {
   // Dialog APIs
   openFolder: () => ipcRenderer.invoke('dialog:openFolder'),
+  openFolderForMove: () => ipcRenderer.invoke('dialog:openFolderForMove'),
+  openVault: () => ipcRenderer.invoke('dialog:openVault'),
   openFile: (options?: { filters?: { name: string; extensions: string[] }[] }) => 
     ipcRenderer.invoke('dialog:openFile', options),
 
@@ -23,6 +25,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   moveFile: (src: string, dest: string) => ipcRenderer.invoke('fs:moveFile', src, dest),
   deleteFile: (filePath: string) => ipcRenderer.invoke('fs:deleteFile', filePath),
   showInExplorer: (filePath: string) => ipcRenderer.invoke('fs:showInExplorer', filePath),
+  approveExternalPaths: (paths: string[]) => ipcRenderer.invoke('fs:approveExternalPaths', paths),
 
   // Menu action listeners (returns unsubscribe function)
   onMenuAction: (callback: (action: string) => void) => {
@@ -66,6 +69,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Vault File Watcher APIs
   vault: {
+    getStatus: () => ipcRenderer.invoke('vault:getStatus'),
+    setCurrent: (vaultPath: string) => ipcRenderer.invoke('vault:setCurrent', vaultPath),
     startWatching: (vaultPath: string) => ipcRenderer.invoke('vault:startWatching', vaultPath),
     stopWatching: () => ipcRenderer.invoke('vault:stopWatching'),
     onFileChanged: (callback: (data: { eventType: string; filename: string; vaultPath: string }) => void) => {
@@ -77,4 +82,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Window APIs
   openCopilotWindow: () => ipcRenderer.invoke('window:openCopilot'),
+
+  // Auth APIs
+  startGoogleAuth: (clientId: string, scopes: string[], clientSecret?: string) => 
+    ipcRenderer.invoke('auth:googleStart', { clientId, scopes, clientSecret }),
 });

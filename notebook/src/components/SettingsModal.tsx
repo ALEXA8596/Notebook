@@ -89,8 +89,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
       window.electronAPI.addons.listThemes().then(setThemes);
       setAddonRefreshKey((k) => k + 1);
     };
-    window.electronAPI.addons.onPluginChanged(handlePluginChange);
-    window.electronAPI.addons.onThemeChanged(handleThemeChange);
+    const unsubscribePlugin = window.electronAPI.addons.onPluginChanged(handlePluginChange);
+    const unsubscribeTheme = window.electronAPI.addons.onThemeChanged(handleThemeChange);
+    return () => {
+      unsubscribePlugin?.();
+      unsubscribeTheme?.();
+    };
   }, [isOpen]);
 
   const refreshAddons = useCallback(async () => {

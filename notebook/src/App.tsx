@@ -273,13 +273,19 @@ function App() {
   const [showVaultManager, setShowVaultManager] = useState(true);
   const [versionHistoryFile, setVersionHistoryFile] = useState<string | null>(null);
   const autosaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const vaultRefreshTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Open vault handler
   interface Vault {
     path: string;
   }
 
-  const handleOpenVault = (vault: Vault): void => {
+  const handleOpenVault = async (vault: Vault): Promise<void> => {
+    const ok = await window.electronAPI?.vault?.setCurrent?.(vault.path);
+    if (!ok) {
+      alert('This vault is not approved. Please add it again.');
+      return;
+    }
     setCurrentPath(vault.path);
     window.localStorage.setItem('lastVaultPath', vault.path);
     setShowVaultManager(false);
@@ -301,7 +307,12 @@ function App() {
     const lastVault = window.localStorage.getItem('lastVaultPath');
     if (lastVault && !currentPath) {
       // Try to reopen the last vault automatically
-      setCurrentPath(lastVault);
+      window.electronAPI?.vault?.setCurrent?.(lastVault).then((ok: boolean) => {
+        if (ok) {
+          setCurrentPath(lastVault);
+          setShowVaultManager(false);
+        }
+      });
     }
   }, [currentPath, setCurrentPath]);
 
@@ -320,7 +331,10 @@ function App() {
         // Debounce the refresh to avoid too many updates
         console.log('Vault file changed:', data.filename);
         // Refresh file structure after a short delay
-        setTimeout(() => {
+        if (vaultRefreshTimerRef.current) {
+          clearTimeout(vaultRefreshTimerRef.current);
+        }
+        vaultRefreshTimerRef.current = setTimeout(() => {
           loadFileStructure(currentPath).then(setFileStructure).catch(console.error);
         }, 200);
       });
@@ -331,6 +345,10 @@ function App() {
       unsubscribeFileChanged?.();
       // Stop watching when vault changes or component unmounts
       window.electronAPI?.vault?.stopWatching();
+      if (vaultRefreshTimerRef.current) {
+        clearTimeout(vaultRefreshTimerRef.current);
+        vaultRefreshTimerRef.current = null;
+      }
     };
   }, [currentPath, setFileStructure]);
 

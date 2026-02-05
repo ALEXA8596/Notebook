@@ -371,6 +371,7 @@ export const FileExplorer: React.FC = () => {
       try {
         const filePath = (file as any).path;
         if (filePath) {
+          await window.electronAPI.approveExternalPaths([filePath]);
           const fileName = filePath.split(/[\\/]/).pop() || file.name;
           let destPath = `${targetFolder}/${fileName}`;
           
@@ -394,7 +395,7 @@ export const FileExplorer: React.FC = () => {
 
   const handleMoveTo = async (entry: FileEntry) => {
     // Open folder picker dialog
-    const targetFolder = await window.electronAPI.openFolder();
+    const targetFolder = await window.electronAPI.openFolderForMove();
     if (targetFolder) {
       const wasOpen = useAppStore.getState().openFiles.includes(entry.path);
       try {
@@ -569,6 +570,7 @@ export const FileExplorer: React.FC = () => {
           // Get the file path - in Electron, dropped files have a path property
           const filePath = (file as any).path as string;
           if (filePath) {
+            await window.electronAPI.approveExternalPaths([filePath]);
             const fileName = filePath.split(/[\\/]/).pop() || file.name;
             let destPath = `${currentPath}/${fileName}`;
             

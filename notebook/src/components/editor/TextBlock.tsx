@@ -197,6 +197,7 @@ export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onConte
   useEffect(() => {
     const handleFormat = (e: CustomEvent<{ action: string }>) => {
       if (!textareaRef.current) return;
+      if (isTruncated) return;
       
       const textarea = textareaRef.current;
       const { selectionStart, selectionEnd } = textarea;
@@ -271,7 +272,7 @@ export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onConte
 
     window.addEventListener('editor-format', handleFormat as EventListener);
     return () => window.removeEventListener('editor-format', handleFormat as EventListener);
-  }, [value, onChange]);
+  }, [value, onChange, isTruncated]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const textarea = textareaRef.current;
@@ -416,6 +417,9 @@ export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onConte
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    if (isTruncated) {
+      return;
+    }
     let newValue = e.target.value;
     
     // Truncate if exceeds limit
@@ -670,7 +674,7 @@ export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onConte
           <div className="h-4 w-px bg-gray-200 dark:bg-gray-700 mx-2" />
           <div className="flex items-center gap-1 text-amber-500 text-xs">
             <AlertTriangle size={14} />
-            <span>Content truncated (max 500KB)</span>
+            <span>Read-only: file exceeds 500KB</span>
           </div>
         </>
       )}
@@ -768,6 +772,7 @@ export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onConte
               onKeyUp={handleCursorChange}
               onClick={handleCursorChange}
               onSelect={handleCursorChange}
+              readOnly={isTruncated}
               placeholder={`Start writing your note...
 
 Use **bold**, *italic*, and \`code\` formatting.

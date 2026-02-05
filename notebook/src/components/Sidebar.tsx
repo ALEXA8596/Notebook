@@ -5,7 +5,7 @@ import {
   Cloud, Pencil, Timer, StickyNote, Info, Layout, Shapes, Grid2x2
 } from 'lucide-react';
 import { useAppStore } from '../store/store';
-import { openFolder, createFile } from '../lib/fileSystem';
+import { openVault, createFile } from '../lib/fileSystem';
 import clsx from 'clsx';
 
 // Sidebar item definitions
@@ -32,8 +32,14 @@ export const Sidebar: React.FC = () => {
   };
 
   const handleOpenFolder = async () => {
-    const path = await openFolder();
-    if (path) setCurrentPath(path);
+    const path = await openVault();
+    if (path) {
+      const ok = await window.electronAPI?.vault?.setCurrent?.(path);
+      if (ok) {
+        setCurrentPath(path);
+        window.localStorage.setItem('lastVaultPath', path);
+      }
+    }
   };
 
   const handleSave = () => window.dispatchEvent(new CustomEvent('app-save'));
@@ -92,7 +98,7 @@ export const Sidebar: React.FC = () => {
     
     // System
     { id: 'save', icon: Save, label: 'Save', description: 'Save all unsaved changes to disk immediately', shortcut: '⌘S', category: 'system', action: handleSave },
-    { id: 'folder', icon: FolderOpen, label: 'Open Folder', description: 'Open a folder from your filesystem to browse or add to your vault', category: 'system', action: handleOpenFolder },
+    { id: 'folder', icon: FolderOpen, label: 'Open Vault', description: 'Open a folder from your filesystem as a vault', category: 'system', action: handleOpenFolder },
     { id: 'about', icon: Info, label: 'About', description: 'View app version, credits, and license information', category: 'system', action: () => window.dispatchEvent(new CustomEvent('app-open-about')) },
     { id: 'settings', icon: Settings, label: 'Settings', description: 'Customize appearance, editor behavior, plugins, and other preferences', category: 'system', action: () => window.dispatchEvent(new CustomEvent('app-open-settings')) },
   ];

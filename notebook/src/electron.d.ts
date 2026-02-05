@@ -57,6 +57,8 @@ interface AddonsAPI {
 }
 
 interface VaultAPI {
+  getStatus: () => Promise<{ currentVaultPath: string | null; approvedVaults: string[] }>;
+  setCurrent: (vaultPath: string) => Promise<boolean>;
   startWatching: (vaultPath: string) => Promise<boolean>;
   stopWatching: () => Promise<boolean>;
   onFileChanged: (callback: (data: { eventType: string; filename: string; vaultPath: string }) => void) => () => void;
@@ -65,6 +67,8 @@ interface VaultAPI {
 interface ElectronAPI {
   // Dialog APIs
   openFolder: () => Promise<string | null>;
+  openFolderForMove: () => Promise<string | null>;
+  openVault: () => Promise<string | null>;
   openFile: (options?: { filters?: FileFilter[] }) => Promise<string | null>;
   
   // File System APIs
@@ -79,6 +83,7 @@ interface ElectronAPI {
   moveFile: (src: string, dest: string) => Promise<void>;
   deleteFile: (filePath: string) => Promise<void>;
   showInExplorer: (filePath: string) => Promise<void>;
+  approveExternalPaths: (paths: string[]) => Promise<boolean>;
   
   // Menu action listeners (returns unsubscribe function)
   onMenuAction: (callback: (action: string) => void) => () => void;
@@ -92,6 +97,9 @@ interface ElectronAPI {
 
   // Window APIs
   openCopilotWindow: () => Promise<boolean>;
+
+  // Auth APIs
+  startGoogleAuth: (clientId: string, scopes: string[], clientSecret?: string) => Promise<{ access_token: string; refresh_token?: string; expires_at: number; token_type: string }>;
 }
 
 declare global {
