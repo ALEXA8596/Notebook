@@ -3,6 +3,8 @@ import { useAppStore, FileEntry } from '../store/store';
 import { Send, Bot, User, Loader2, Settings, Trash2, FileText, FolderTree } from 'lucide-react';
 import { createTwoFilesPatch } from 'diff';
 import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
 
 interface Message {
@@ -757,7 +759,29 @@ When helping with notes, be concise and helpful. If the user asks about their cu
               >
                 {message.role === 'assistant' ? (
                   <div className="text-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-pre:my-2 prose-code:bg-gray-200 dark:prose-code:bg-gray-700 prose-code:px-1 prose-code:rounded">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                      code: ({ className, children, ...props }) => {
+                        const match = /language-(\w+)/.exec(className || '');
+                        const codeString = String(children).replace(/\n$/, '');
+                        if (match) {
+                          return (
+                            <SyntaxHighlighter
+                              style={oneDark}
+                              language={match[1]}
+                              PreTag="div"
+                              customStyle={{ margin: 0, borderRadius: '0.5rem', fontSize: '0.8rem' }}
+                            >
+                              {codeString}
+                            </SyntaxHighlighter>
+                          );
+                        }
+                        return (
+                          <code className={className} {...props}>
+                            {children}
+                          </code>
+                        );
+                      },
+                    }}>{message.content}</ReactMarkdown>
                   </div>
                 ) : (
                   <p className="text-sm whitespace-pre-wrap">{message.content}</p>

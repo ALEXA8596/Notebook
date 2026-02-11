@@ -146,7 +146,7 @@ export const ExcalidrawEmbed: React.FC<ExcalidrawEmbedProps> = ({ dataString, on
       >
         {isScanning ? <Loader2 className="animate-spin" size={16} /> : <ScanText size={16} />}
       </button>
-      <Suspense fallback={<div className="flex items-center justify-center h-full">Loading Excalidraw...</div>}>
+      <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center h-full">Loading Excalidraw...</div>}>
         <Excalidraw
           initialData={initialData}
           excalidrawAPI={(api) => setExcalidrawAPI(api)}

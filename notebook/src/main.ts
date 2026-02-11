@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, MenuItemConstructorOptions, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, MenuItemConstructorOptions, shell, protocol, net } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { watch, FSWatcher } from 'node:fs';
@@ -1010,10 +1010,28 @@ ipcMain.handle('vault:stopWatching', async () => {
   return true;
 });
 
+// Register custom protocol for serving local vault files (images, etc.)
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'local-file', privileges: { bypassCSP: true, stream: true, supportFetchAPI: true } }
+]);
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on('ready', async () => {
+  // Handle local-file:// protocol requests by serving files from disk
+  protocol.handle('local-file', (request) => {
+    // URL format: local-file:///C:/path/to/file.png (absolute path encoded in URL)
+    const url = new URL(request.url);
+    // Decode the pathname — on Windows url.pathname starts with /C:/...
+    let filePath = decodeURIComponent(url.pathname);
+    // Remove leading slash on Windows (e.g., /C:/... -> C:/...)
+    if (process.platform === 'win32' && filePath.startsWith('/')) {
+      filePath = filePath.substring(1);
+    }
+    return net.fetch(`file://${filePath}`);
+  });
+
   await loadVaultState();
   createWindow();
 });

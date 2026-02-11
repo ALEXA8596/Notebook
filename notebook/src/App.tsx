@@ -318,37 +318,41 @@ function App() {
 
   // Load file structure when vault is set
   useEffect(() => {
-    let unsubscribeFileChanged: (() => void) | undefined;
-    
-    if (currentPath) {
-      loadFileStructure(currentPath).then(setFileStructure).catch(console.error);
-      
-      // Start watching the vault for file changes
-      window.electronAPI?.vault?.startWatching(currentPath);
-      
-      // Set up listener for file changes (store unsubscribe function)
-      unsubscribeFileChanged = window.electronAPI?.vault?.onFileChanged((data) => {
-        // Debounce the refresh to avoid too many updates
-        console.log('Vault file changed:', data.filename);
-        // Refresh file structure after a short delay
-        if (vaultRefreshTimerRef.current) {
-          clearTimeout(vaultRefreshTimerRef.current);
+    if (!currentPath) return;
+
+    let cancelled = false;
+
+    loadFileStructure(currentPath).then((files) => {
+      if (!cancelled) setFileStructure(files);
+    }).catch(console.error);
+
+    // Start watching the vault for file changes
+    window.electronAPI?.vault?.startWatching(currentPath);
+
+    // Set up listener for file changes
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const removeListener = window.electronAPI?.vault?.onFileChanged((data) => {
+      // Ignore events from a different vault
+      if (data.vaultPath !== currentPath) return;
+      console.log('Vault file changed:', data.filename);
+      // Debounce the refresh to avoid too many updates
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        if (!cancelled) {
+          loadFileStructure(currentPath).then((files) => {
+            if (!cancelled) setFileStructure(files);
+          }).catch(console.error);
         }
-        vaultRefreshTimerRef.current = setTimeout(() => {
-          loadFileStructure(currentPath).then(setFileStructure).catch(console.error);
-        }, 200);
-      });
-    }
-    
+      }, 200);
+    });
+
     return () => {
-      // Unsubscribe from file change listener
-      unsubscribeFileChanged?.();
+      cancelled = true;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      // Remove the IPC listener to prevent stale callbacks
+      removeListener?.();
       // Stop watching when vault changes or component unmounts
       window.electronAPI?.vault?.stopWatching();
-      if (vaultRefreshTimerRef.current) {
-        clearTimeout(vaultRefreshTimerRef.current);
-        vaultRefreshTimerRef.current = null;
-      }
     };
   }, [currentPath, setFileStructure]);
 
@@ -595,10 +599,65 @@ function App() {
       useAppStore.getState().closeFile(filePath);
     };
 
+    const handleRenameFile = (e: CustomEvent<{ oldPath: string; newPath: string; affectedFiles?: { oldPath: string; newPath: string }[] }>) => {
+      const { oldPath, newPath, affectedFiles } = e.detail;
+      
+      // Build list of tabs to rename: use affectedFiles if provided, otherwise just the single file
+      const renames = affectedFiles && affectedFiles.length > 0
+        ? affectedFiles
+        : [{ oldPath, newPath }];
+      
+      for (const { oldPath: tabOldPath, newPath: tabNewPath } of renames) {
+        const node = model.getNodeById(tabOldPath);
+        if (!node) continue;
+        
+        try {
+          const newName = tabNewPath.split('/').pop() || tabNewPath;
+          const parent = node.getParent();
+          if (!parent) continue;
+          
+          const parentId = parent.getId();
+          // Determine current tab index within its tabset to preserve position
+          const siblings = parent.getChildren();
+          const tabIndex = siblings.findIndex(child => child.getId() === tabOldPath);
+          
+          // Remove the old tab
+          model.doAction(Actions.deleteTab(tabOldPath));
+          
+          // Re-add at the same position with new id/name/config
+          model.doAction(Actions.addNode({
+            type: 'tab',
+            component: 'file',
+            name: newName,
+            id: tabNewPath,
+            enableDrag: true,
+            enableRename: false,
+            config: { path: tabNewPath }
+          }, parentId, DockLocation.CENTER, tabIndex >= 0 ? tabIndex : -1));
+        } catch (err) {
+          console.error('Failed to update tab for renamed file', tabOldPath, err);
+        }
+      }
+      
+      // Select the tab that corresponds to the current activeFile
+      const { activeFile: currentActive } = useAppStore.getState();
+      if (currentActive) {
+        try {
+          const activeNode = model.getNodeById(currentActive);
+          if (activeNode) {
+            model.doAction(Actions.selectTab(currentActive));
+          }
+        } catch (err) {
+          // Ignore if tab not found
+        }
+      }
+    };
+
     window.addEventListener('app-open-graph', openGraph);
     window.addEventListener('app-toggle-search', toggleSearch);
     window.addEventListener('app-open-to-right', openToRight);
     window.addEventListener('app-close-file', handleCloseFile);
+    window.addEventListener('app-rename-file', handleRenameFile as EventListener);
     
     // Open AI Copilot - check display mode preference
     const openCopilot = () => {
@@ -791,6 +850,7 @@ function App() {
       window.removeEventListener('app-toggle-search', toggleSearch);
       window.removeEventListener('app-open-to-right', openToRight);
       window.removeEventListener('app-close-file', handleCloseFile);
+      window.removeEventListener('app-rename-file', handleRenameFile as EventListener);
       window.removeEventListener('app-open-copilot', openCopilot);
       window.removeEventListener('app-open-version-history', openVersionHistory);
       window.removeEventListener('app-open-tasks', openTasks);

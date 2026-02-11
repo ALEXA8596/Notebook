@@ -11,7 +11,6 @@ import { SpreadsheetEmbed } from '../embeds/SpreadsheetEmbed';
 import { ContextMenu, ContextMenuOption } from '../ui/ContextMenu';
 import { Link, ExternalLink, Scissors, Copy, Clipboard, Type, AlignLeft, Plus, GripHorizontal, Code, Trash2 } from 'lucide-react';
 import { useAppStore } from '../../store/store';
-import { saveImage } from '../../lib/fileSystem';
 
 const ResizableWrapper: React.FC<{ 
   children: React.ReactNode; 
@@ -309,46 +308,10 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange, showStatusBar
     { label: 'Select all', shortcut: 'Ctrl+A' },
   ];
 
-  const handlePaste = async (e: React.ClipboardEvent) => {
-    const items = e.clipboardData.items;
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.indexOf('image') !== -1) {
-        e.preventDefault();
-        const blob = items[i].getAsFile();
-        if (blob && currentPath) {
-          const reader = new FileReader();
-          reader.onload = async (event) => {
-            if (event.target?.result) {
-              const arrayBuffer = event.target.result as ArrayBuffer;
-              const uint8Array = new Uint8Array(arrayBuffer);
-              const fileName = `image-${Date.now()}.png`;
-              const fullPath = `${currentPath}/${fileName}`;
-              
-              try {
-                await saveImage(fullPath, uint8Array);
-                // Insert markdown image
-                const imageMarkdown = `\n![${fileName}](${fileName})\n`;
-                
-                // Find where to insert (at end for now, or focused block if I could track it)
-                // For simplicity, appending to content
-                onChange(content + imageMarkdown);
-              } catch (err) {
-                console.error("Failed to save pasted image", err);
-              }
-            }
-          };
-          reader.readAsArrayBuffer(blob);
-        }
-        return; // Handle only the first image
-      }
-    }
-  };
-
   return (
     <div 
       className="w-full h-full flex flex-col bg-white dark:bg-gray-900 overflow-hidden"
       onContextMenu={(e) => handleContextMenu(e)}
-      onPaste={handlePaste}
     >
       <div className="flex-1 overflow-y-auto">
         {blocks.map((block) => (

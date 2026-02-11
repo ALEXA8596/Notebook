@@ -132,7 +132,7 @@ const FileNode: React.FC<FileNodeProps> = ({ entry, depth = 0, onMoveFile, onCon
 };
 
 export const FileExplorer: React.FC = () => {
-  const { fileStructure, currentPath, setFileStructure, closeFile, removeFileContent, renameFileContent } = useAppStore();
+  const { fileStructure, currentPath, setFileStructure, closeFile, removeFileContent, renameFileContent, renameFilePath } = useAppStore();
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
   const quickCreateRef = useRef<HTMLDivElement>(null);
   const explorerRef = useRef<HTMLDivElement>(null);
@@ -189,22 +189,43 @@ export const FileExplorer: React.FC = () => {
     const oldPath = renameModal.entry.path;
     const parentDir = oldPath.substring(0, oldPath.lastIndexOf('/'));
     const newPath = `${parentDir}/${renameModal.newName}`;
-    const wasOpen = useAppStore.getState().openFiles.includes(oldPath);
+    
+    // Collect all affected files before the rename
+    const affectedFiles: Array<{oldPath: string, newPath: string}> = [];
+    
+    if (renameModal.entry.isDirectory) {
+      // For folders, collect all open files within this folder
+      const openFiles = useAppStore.getState().openFiles;
+      const filesInFolder = openFiles.filter(f => f.startsWith(oldPath + '/'));
+      
+      for (const filePath of filesInFolder) {
+        const relativePath = filePath.substring(oldPath.length);
+        affectedFiles.push({
+          oldPath: filePath,
+          newPath: newPath + relativePath
+        });
+      }
+    } else {
+      // For single files
+      affectedFiles.push({ oldPath, newPath });
+    }
     
     try {
       await window.electronAPI.moveFile(oldPath, newPath);
       // Update store: transfer file content from old path to new path
-      renameFileContent(oldPath, newPath);
-      // Close old tab and open new one if file was open
-      if (wasOpen) {
-        window.dispatchEvent(new CustomEvent('app-close-file', { detail: { path: oldPath } }));
-        // Use requestAnimationFrame to ensure tab closes before opening new one
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            useAppStore.getState().openFile(newPath);
-          });
-        });
+      if (renameModal.entry.isDirectory) {
+        renameFilePath(oldPath, newPath);
+      } else {
+        renameFileContent(oldPath, newPath);
       }
+      
+      // Dispatch event to update tabs with all affected files
+      if (affectedFiles.length > 0) {
+        window.dispatchEvent(new CustomEvent('app-rename-file', {
+          detail: { affectedFiles }
+        }));
+      }
+      
       await refreshFileStructure();
       setRenameModal({ isOpen: false, entry: null, newName: '' });
     } catch (e) {

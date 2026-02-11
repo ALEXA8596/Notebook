@@ -263,3 +263,64 @@ input[type="text"],
 textarea {
   cursor: text;
 }
+
+/* Prevent FlexLayout tab content from being dragged - only tab buttons should drag */
+.flexlayout__tab {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+.flexlayout__tab * {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+/* But keep tab buttons draggable */
+.flexlayout__tab_button {
+  -webkit-user-drag: element;
+}
+
+/* ========================================
+   CodeMirror Obsidian-like Overrides
+   ======================================== */
+
+/* Ensure the CM wrapper fills its parent */
+.cm-obsidian-wrapper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.cm-obsidian-wrapper .cm-editor {
+  height: 100%;
+}
+
+/* Placeholder styling */
+.cm-obsidian-wrapper .cm-placeholder {
+  color: #555 !important;
+  font-style: italic;
+}
+
+/* Smooth caret */
+.cm-obsidian-wrapper .cm-cursor {
+  transition: left 50ms ease, top 50ms ease;
+}
+
+/* Scrollbar styling to match Obsidian */
+.cm-obsidian-wrapper .cm-scroller::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.cm-obsidian-wrapper .cm-scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.cm-obsidian-wrapper .cm-scroller::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.cm-obsidian-wrapper .cm-scroller::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}

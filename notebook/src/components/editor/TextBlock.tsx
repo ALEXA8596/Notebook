@@ -2,8 +2,23 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useAppStore, FileEntry } from '../../store/store';
-import { readFileContent } from '../../lib/fileSystem';
-import { Eye, Edit3, Columns, AlertTriangle } from 'lucide-react';
+import { readFileContent, saveImage } from '../../lib/fileSystem';
+import { Eye, Edit3, Columns, AlertTriangle, Sparkles } from 'lucide-react';
+
+// CodeMirror 6 imports
+import { EditorView, keymap, placeholder as cmPlaceholder, drawSelection, dropCursor, highlightActiveLine, highlightSpecialChars, rectangularSelection, crosshairCursor, lineNumbers, highlightActiveLineGutter } from '@codemirror/view';
+import { EditorState, Compartment } from '@codemirror/state';
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
+import { languages } from '@codemirror/language-data';
+import { syntaxHighlighting, defaultHighlightStyle, HighlightStyle, bracketMatching, indentOnInput, foldGutter, foldKeymap } from '@codemirror/language';
+import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap, CompletionContext, CompletionResult } from '@codemirror/autocomplete';
+import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
+import { lintKeymap } from '@codemirror/lint';
+import { tags } from '@lezer/highlight';
+
+// Import our live preview extension
+import { livePreviewExtension } from './livePreview';
 
 // Constants
 const MAX_CONTENT_LENGTH = 500000; // 500KB character limit
@@ -20,6 +35,85 @@ const colors = {
   accentHover: 'var(--accent-hover, #8b5cf6)',
   border: 'var(--border, #374151)', // gray-700
 };
+
+// Obsidian-like syntax highlighting
+const obsidianHighlightStyle = HighlightStyle.define([
+  { tag: tags.heading1, color: '#f5f5f5', fontWeight: 'bold', fontSize: '1.8em' },
+  { tag: tags.heading2, color: '#f5f5f5', fontWeight: 'bold', fontSize: '1.5em' },
+  { tag: tags.heading3, color: '#f5f5f5', fontWeight: 'bold', fontSize: '1.3em' },
+  { tag: tags.heading4, color: '#f5f5f5', fontWeight: 'bold', fontSize: '1.1em' },
+  { tag: tags.heading5, color: '#f5f5f5', fontWeight: 'bold', fontSize: '1.05em' },
+  { tag: tags.heading6, color: '#f5f5f5', fontWeight: 'bold', fontSize: '1em' },
+  { tag: tags.strong, color: '#f5f5f5', fontWeight: 'bold' },
+  { tag: tags.emphasis, color: '#f5f5f5', fontStyle: 'italic' },
+  { tag: tags.strikethrough, color: '#a3a3a3', textDecoration: 'line-through' },
+  { tag: tags.link, color: '#7c3aed' },
+  { tag: tags.url, color: '#7c3aed' },
+  { tag: tags.monospace, color: '#f87171', backgroundColor: 'rgba(248, 113, 113, 0.1)', borderRadius: '3px', padding: '0 4px' },
+  { tag: tags.quote, color: '#a3a3a3', fontStyle: 'italic', borderLeft: '3px solid #7c3aed', paddingLeft: '12px' },
+  { tag: tags.list, color: '#f5f5f5' },
+  { tag: tags.meta, color: '#6b7280' },
+  { tag: tags.processingInstruction, color: '#6b7280' },
+  { tag: tags.comment, color: '#6b7280' },
+]);
+
+// Custom CodeMirror theme for Obsidian-like appearance
+const obsidianTheme = EditorView.theme({
+  '&': {
+    backgroundColor: 'transparent',
+    color: colors.text,
+    fontSize: '16px',
+    lineHeight: '1.75',
+  },
+  '.cm-content': {
+    caretColor: colors.accent,
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif',
+    padding: '0',
+  },
+  '.cm-cursor, .cm-dropCursor': {
+    borderLeftColor: colors.accent,
+    borderLeftWidth: '2px',
+  },
+  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
+    backgroundColor: 'rgba(124, 58, 237, 0.3)',
+  },
+  '.cm-activeLine': {
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  '.cm-gutters': {
+    backgroundColor: 'transparent',
+    color: colors.textMuted,
+    border: 'none',
+  },
+  '.cm-activeLineGutter': {
+    backgroundColor: 'transparent',
+  },
+  '.cm-line': {
+    padding: '0 4px',
+  },
+  '.cm-placeholder': {
+    color: colors.textMuted,
+    fontStyle: 'italic',
+  },
+  // Header styling
+  '.cm-header-1': { fontSize: '1.8em', fontWeight: 'bold' },
+  '.cm-header-2': { fontSize: '1.5em', fontWeight: 'bold' },
+  '.cm-header-3': { fontSize: '1.3em', fontWeight: 'bold' },
+  '.cm-header-4': { fontSize: '1.1em', fontWeight: 'bold' },
+  '.cm-header-5': { fontSize: '1.05em', fontWeight: 'bold' },
+  '.cm-header-6': { fontSize: '1em', fontWeight: 'bold' },
+  // Blockquote styling
+  '.cm-blockquote': {
+    borderLeft: '3px solid ' + colors.accent,
+    paddingLeft: '12px',
+    color: colors.textMuted,
+  },
+  // Code block styling
+  '.cm-codeblock-delimiter': {
+    color: colors.textMuted,
+    opacity: '0.6',
+  },
+}, { dark: true });
 
 // Embedded file component
 const EmbeddedFile: React.FC<{ 
@@ -146,16 +240,18 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
-type ViewMode = 'edit' | 'preview' | 'split';
+type ViewMode = 'edit' | 'preview' | 'split' | 'live';
 
 export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onContextMenu, onNavigate, filePath }) => {
-  const { fileStructure, setActiveFile, activeFile } = useAppStore();
+  const { fileStructure, setActiveFile, activeFile, currentPath } = useAppStore();
   const [value, setValue] = useState(content);
-  const [viewMode, setViewMode] = useState<ViewMode>('edit');
+  const [viewMode, setViewMode] = useState<ViewMode>('live');
   const [isTruncated, setIsTruncated] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
+  const cmContainerRef = useRef<HTMLDivElement>(null);
+  const editorViewRef = useRef<EditorView | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [autocompleteQuery, setAutocompleteQuery] = useState('');
@@ -177,6 +273,251 @@ export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onConte
   // Debounce for preview rendering to improve performance
   const debouncedValue = useDebounce(value, DEBOUNCE_DELAY);
 
+  // Compartment for live preview
+  const livePreviewCompartment = useMemo(() => new Compartment(), []);
+
+  // Wiki-link autocomplete
+  const wikiLinkCompletion = useCallback((context: CompletionContext): CompletionResult | null => {
+    const word = context.matchBefore(/\[\[[\w\s-]*/);
+    if (!word) return null;
+    
+    const query = word.text.slice(2).toLowerCase(); // Remove [[
+    const options = flatFiles
+      .filter(f => f.name.toLowerCase().includes(query))
+      .slice(0, 10)
+      .map(f => ({
+        label: f.name.replace(/\.md$/i, ''),
+        type: 'file',
+        apply: (view: EditorView, _completion: any, from: number, to: number) => {
+          const linkText = `[[${f.name.replace(/\.md$/i, '')}]]`;
+          view.dispatch({
+            changes: { from: word.from, to: context.pos, insert: linkText },
+          });
+        },
+      }));
+
+    return {
+      from: word.from,
+      options,
+      filter: false,
+    };
+  }, [flatFiles]);
+
+  // Smart list continuation extension
+  const smartListExtension = useMemo(() => {
+    return keymap.of([{
+      key: 'Enter',
+      run: (view: EditorView) => {
+        const state = view.state;
+        const pos = state.selection.main.head;
+        const line = state.doc.lineAt(pos);
+        const lineText = line.text;
+        
+        // Match list items: - [ ], - [x], -, *, +, 1., 2., etc.
+        const listMatch = lineText.match(/^(\s*)([-*+]|\d+\.)\s(\[[ xX]\]\s)?/);
+        if (listMatch) {
+          const indent = listMatch[1];
+          const marker = listMatch[2];
+          const checkbox = listMatch[3];
+          
+          // Empty list item - remove it
+          const contentAfterMarker = lineText.substring(listMatch[0].length).trim();
+          if (contentAfterMarker === '') {
+            view.dispatch({
+              changes: { from: line.from, to: line.to, insert: '' },
+              selection: { anchor: line.from },
+            });
+            return true;
+          }
+          
+          // Continue list
+          const newMarker = marker.match(/\d+/) ? `${parseInt(marker) + 1}.` : marker;
+          const newLine = `\n${indent}${newMarker} ${checkbox ? '[ ] ' : ''}`;
+          view.dispatch({
+            changes: { from: pos, insert: newLine },
+            selection: { anchor: pos + newLine.length },
+          });
+          return true;
+        }
+        
+        // Blockquote continuation
+        const quoteMatch = lineText.match(/^(\s*>+\s*)/);
+        if (quoteMatch && lineText.trim() !== '>') {
+          view.dispatch({
+            changes: { from: pos, insert: '\n' + quoteMatch[1] },
+            selection: { anchor: pos + 1 + quoteMatch[1].length },
+          });
+          return true;
+        }
+        
+        return false; // Let default behavior handle it
+      },
+    }]);
+  }, []);
+
+  // Initialize CodeMirror
+  useEffect(() => {
+    if (!cmContainerRef.current || (viewMode !== 'edit' && viewMode !== 'split' && viewMode !== 'live')) return;
+    
+    // Don't reinitialize if already exists
+    if (editorViewRef.current) {
+      // Update content if changed externally
+      const currentContent = editorViewRef.current.state.doc.toString();
+      if (value !== currentContent) {
+        editorViewRef.current.dispatch({
+          changes: { from: 0, to: currentContent.length, insert: value },
+        });
+      }
+      return;
+    }
+
+    const updateListener = EditorView.updateListener.of((update) => {
+      if (update.docChanged) {
+        const newContent = update.state.doc.toString();
+        if (newContent !== lastExternalContent.current) {
+          setValue(newContent);
+          lastExternalContent.current = newContent;
+          onChange(newContent);
+        }
+      }
+    });
+
+    const extensions = [
+      // Basic setup
+      lineNumbers(),
+      highlightActiveLineGutter(),
+      highlightSpecialChars(),
+      history(),
+      foldGutter(),
+      drawSelection(),
+      dropCursor(),
+      EditorState.allowMultipleSelections.of(true),
+      indentOnInput(),
+      bracketMatching(),
+      closeBrackets(),
+      autocompletion({
+        override: [wikiLinkCompletion],
+      }),
+      rectangularSelection(),
+      crosshairCursor(),
+      highlightActiveLine(),
+      highlightSelectionMatches(),
+      
+      // Keymaps
+      keymap.of([
+        ...closeBracketsKeymap,
+        ...defaultKeymap,
+        ...searchKeymap,
+        ...historyKeymap,
+        ...foldKeymap,
+        ...completionKeymap,
+        ...lintKeymap,
+        indentWithTab,
+      ]),
+      
+      // Smart list continuation
+      smartListExtension,
+      
+      // Markdown support
+      markdown({ base: markdownLanguage, codeLanguages: languages }),
+      
+      // Theming
+      obsidianTheme,
+      syntaxHighlighting(obsidianHighlightStyle),
+      
+      // Live preview (controlled by compartment)
+      livePreviewCompartment.of(viewMode === 'live' ? livePreviewExtension(currentPath || undefined) : []),
+      
+      // Placeholder
+      cmPlaceholder(`Start writing your note...
+
+Use **bold**, *italic*, and \`code\` formatting.
+Create links with [[filename]] syntax.
+Make lists with - or 1. 
+Add tasks with - [ ] syntax.`),
+      
+      // Update listener
+      updateListener,
+    ];
+
+    const state = EditorState.create({
+      doc: value,
+      extensions,
+    });
+
+    const view = new EditorView({
+      state,
+      parent: cmContainerRef.current,
+    });
+
+    editorViewRef.current = view;
+
+    return () => {
+      view.destroy();
+      editorViewRef.current = null;
+    };
+  }, [viewMode, livePreviewCompartment, smartListExtension, wikiLinkCompletion, currentPath]);
+
+  // Toggle live preview when mode changes
+  useEffect(() => {
+    if (!editorViewRef.current) return;
+    
+    editorViewRef.current.dispatch({
+      effects: livePreviewCompartment.reconfigure(
+        viewMode === 'live' ? livePreviewExtension(currentPath || undefined) : []
+      ),
+    });
+  }, [viewMode, livePreviewCompartment, currentPath]);
+
+  // Handle paste for images in CodeMirror
+  useEffect(() => {
+    const container = cmContainerRef.current;
+    if (!container) return;
+
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          e.preventDefault();
+          const blob = items[i].getAsFile();
+          if (blob && currentPath) {
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+              if (event.target?.result) {
+                const arrayBuffer = event.target.result as ArrayBuffer;
+                const uint8Array = new Uint8Array(arrayBuffer);
+                const fileName = `image-${Date.now()}.png`;
+                const fullPath = `${currentPath}/${fileName}`;
+                
+                try {
+                  await saveImage(fullPath, uint8Array);
+                  // Insert markdown image at cursor
+                  const imageMarkdown = `![${fileName}](${fileName})`;
+                  if (editorViewRef.current) {
+                    const pos = editorViewRef.current.state.selection.main.head;
+                    editorViewRef.current.dispatch({
+                      changes: { from: pos, insert: imageMarkdown },
+                      selection: { anchor: pos + imageMarkdown.length },
+                    });
+                  }
+                } catch (err) {
+                  console.error('Failed to save pasted image', err);
+                }
+              }
+            };
+            reader.readAsArrayBuffer(blob);
+          }
+          return;
+        }
+      }
+    };
+
+    container.addEventListener('paste', handlePaste);
+    return () => container.removeEventListener('paste', handlePaste);
+  }, [currentPath]);
+
   // Sync content from props - only when external content changes (file switch or external update)
   useEffect(() => {
     // Only sync if content prop changed from outside (not from our own onChange)
@@ -190,12 +531,23 @@ export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onConte
         setValue(content);
         setIsTruncated(false);
       }
+      
+      // Update CodeMirror if it exists
+      if (editorViewRef.current) {
+        const currentContent = editorViewRef.current.state.doc.toString();
+        if (content !== currentContent) {
+          editorViewRef.current.dispatch({
+            changes: { from: 0, to: currentContent.length, insert: content },
+          });
+        }
+      }
     }
   }, [content]);
 
-  // Handle format events
+  // Handle format events (for textarea fallback)
   useEffect(() => {
     const handleFormat = (e: CustomEvent<{ action: string }>) => {
+      // For CodeMirror, we'd need different handling - for now, this works with textarea
       if (!textareaRef.current) return;
       if (isTruncated) return;
       
@@ -274,6 +626,7 @@ export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onConte
     return () => window.removeEventListener('editor-format', handleFormat as EventListener);
   }, [value, onChange, isTruncated]);
 
+  // Textarea handlers for non-live modes
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -462,40 +815,6 @@ export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onConte
     }
   };
 
-  // Sync preview scroll position with cursor position in editor
-  const syncPreviewScroll = useCallback(() => {
-    if (viewMode !== 'split' || !textareaRef.current || !previewRef.current) return;
-    
-    const textarea = textareaRef.current;
-    const preview = previewRef.current;
-    const cursorPos = textarea.selectionStart;
-    
-    // Calculate what percentage of the document the cursor is at
-    const textBeforeCursor = value.substring(0, cursorPos);
-    const totalLines = value.split('\n').length;
-    const cursorLine = textBeforeCursor.split('\n').length;
-    
-    // Calculate scroll percentage based on line position
-    const scrollPercentage = totalLines > 1 ? (cursorLine - 1) / (totalLines - 1) : 0;
-    
-    // Apply to preview with some smoothing
-    const maxScroll = preview.scrollHeight - preview.clientHeight;
-    const targetScroll = Math.round(scrollPercentage * maxScroll);
-    
-    preview.scrollTo({
-      top: targetScroll,
-      behavior: 'smooth'
-    });
-  }, [viewMode, value]);
-
-  // Sync preview on cursor movement (click, arrow keys, etc.)
-  const handleCursorChange = useCallback(() => {
-    // Debounce the scroll sync slightly to avoid too many updates
-    requestAnimationFrame(() => {
-      syncPreviewScroll();
-    });
-  }, [syncPreviewScroll]);
-
   const handleContextMenu = (e: React.MouseEvent) => {
     if (onContextMenu) {
       e.preventDefault();
@@ -563,6 +882,14 @@ export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onConte
     <div className="flex items-center gap-1 px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex-wrap shrink-0">
       {/* View mode toggle */}
       <div className="flex items-center gap-0.5 mr-3 bg-gray-200 dark:bg-gray-700 rounded-md p-0.5">
+        <button
+          onClick={() => setViewMode('live')}
+          className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${viewMode === 'live' ? 'bg-purple-600 text-white' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-300 dark:hover:bg-gray-600'}`}
+          title="Live preview mode (Obsidian-like)"
+        >
+          <Sparkles size={13} className="inline mr-1" />
+          Live
+        </button>
         <button
           onClick={() => setViewMode('edit')}
           className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${viewMode === 'edit' ? 'bg-purple-600 text-white' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-300 dark:hover:bg-gray-600'}`}
@@ -762,6 +1089,18 @@ export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onConte
       <Toolbar />
       
       <div className="flex-1 flex overflow-hidden">
+        {/* CodeMirror Live Preview mode */}
+        {viewMode === 'live' && (
+          <div className="w-full h-full overflow-hidden cm-wrapper">
+            <div 
+              ref={cmContainerRef} 
+              className="w-full h-full overflow-auto p-6"
+              style={{ maxWidth: '900px', margin: '0 auto' }}
+            />
+          </div>
+        )}
+        
+        {/* Traditional Edit mode (textarea) or Split left pane */}
         {(viewMode === 'edit' || viewMode === 'split') && (
           <div className={`relative flex flex-col ${viewMode === 'split' ? 'w-1/2 border-r border-gray-200 dark:border-gray-700' : 'w-full'}`}>
             <textarea
@@ -769,9 +1108,6 @@ export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onConte
               value={value}
               onChange={handleChange}
               onKeyDown={handleKeyDown}
-              onKeyUp={handleCursorChange}
-              onClick={handleCursorChange}
-              onSelect={handleCursorChange}
               readOnly={isTruncated}
               placeholder={`Start writing your note...
 

@@ -104,6 +104,7 @@ interface AppState {
   markFileViewed: (path: string) => void;
   closeFile: (path: string) => void;
   setActiveFile: (path: string | null) => void;
+  renameFilePath: (oldPath: string, newPath: string) => void;
   setUnsaved: (path: string, unsaved: boolean) => void;
   setFileContent: (path: string, content: string) => void;
   removeFileContent: (path: string) => void;
@@ -452,6 +453,49 @@ export const useAppStore = create<AppState>((set, get) => ({
     return { openFiles: newOpenFiles, activeFile: newActiveFile };
   }),
   setActiveFile: (path) => set((state) => ({ activeFile: path, viewedHistory: [...state.viewedHistory.filter(p => p !== path), path] })),
+  renameFilePath: (oldPath, newPath) => set((state) => {
+    // Helper: update a path if it matches exactly or is inside a renamed folder
+    const updatePath = (p: string): string => {
+      if (p === oldPath) return newPath;
+      // If a folder was renamed, update all children
+      if (p.startsWith(oldPath + '/')) return newPath + p.substring(oldPath.length);
+      return p;
+    };
+
+    // Update openFiles
+    const newOpenFiles = state.openFiles.map(updatePath);
+    // Update activeFile
+    const newActiveFile = state.activeFile ? updatePath(state.activeFile) : state.activeFile;
+    // Update fileContents
+    const newFileContents: Record<string, string> = {};
+    for (const [p, content] of Object.entries(state.fileContents)) {
+      newFileContents[updatePath(p)] = content;
+    }
+    // Update unsavedChanges
+    const newUnsaved = new Set<string>();
+    for (const p of state.unsavedChanges) {
+      newUnsaved.add(updatePath(p));
+    }
+    // Update viewedHistory
+    const newViewedHistory = state.viewedHistory.map(updatePath);
+    // Update recentFiles
+    const newRecentFiles = state.recentFiles.map(updatePath);
+    // Update encryptedNotes
+    const newEncryptedNotes: Record<string, any> = {};
+    for (const [p, info] of Object.entries(state.encryptedNotes)) {
+      const updated = updatePath(p);
+      newEncryptedNotes[updated] = { ...info, path: updated };
+    }
+    return {
+      openFiles: newOpenFiles,
+      activeFile: newActiveFile,
+      fileContents: newFileContents,
+      unsavedChanges: newUnsaved,
+      viewedHistory: newViewedHistory,
+      recentFiles: newRecentFiles,
+      encryptedNotes: newEncryptedNotes,
+    };
+  }),
   setUnsaved: (path, unsaved) => set((state) => {
     const newUnsaved = new Set(state.unsavedChanges);
     if (unsaved) {
