@@ -57,7 +57,7 @@ interface AddonsAPI {
 }
 
 interface VaultAPI {
-  getStatus: () => Promise<{ currentVaultPath: string | null; approvedVaults: string[] }>;
+  getStatus: () => Promise<{ currentVaultPath: string | null }>;
   setCurrent: (vaultPath: string) => Promise<boolean>;
   startWatching: (vaultPath: string) => Promise<boolean>;
   stopWatching: () => Promise<boolean>;

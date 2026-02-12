@@ -123,12 +123,10 @@ let vaultWatcher: FSWatcher | null = null;
 // ==========================================
 
 interface VaultState {
-  approvedVaults: string[];
   currentVaultPath: string | null;
 }
 
 const vaultStatePath = () => path.join(app.getPath('userData'), 'vault-state.json');
-let approvedVaults = new Set<string>();
 let currentVaultPath: string | null = null;
 const approvedExternalPaths = new Set<string>();
 const approvedExternalDirs = new Set<string>();
@@ -169,20 +167,14 @@ const loadVaultState = async (): Promise<void> => {
   try {
     const data = await fs.readFile(vaultStatePath(), 'utf-8');
     const parsed = JSON.parse(data) as VaultState;
-    approvedVaults = new Set((parsed.approvedVaults || []).map(normalizePath));
     currentVaultPath = parsed.currentVaultPath ? normalizePath(parsed.currentVaultPath) : null;
-    if (currentVaultPath) {
-      approvedVaults.add(currentVaultPath);
-    }
   } catch {
-    approvedVaults = new Set();
     currentVaultPath = null;
   }
 };
 
 const saveVaultState = async (): Promise<void> => {
   const state: VaultState = {
-    approvedVaults: Array.from(approvedVaults),
     currentVaultPath,
   };
   await fs.writeFile(vaultStatePath(), JSON.stringify(state, null, 2), 'utf-8');
@@ -531,7 +523,6 @@ ipcMain.handle('dialog:openVault', async () => {
       return null;
     }
     const selected = normalizePath(result.filePaths[0]);
-    approvedVaults.add(selected);
     currentVaultPath = selected;
     await saveVaultState();
     return selected;
@@ -952,22 +943,18 @@ ipcMain.handle('addons:openFolder', async (_, type: 'plugins' | 'themes') => {
 // Vault File Watcher
 // ==========================================
 
-// Set current vault (only if approved)
+// Set current vault
 ipcMain.handle('vault:setCurrent', async (_, vaultPath: string) => {
   const normalized = normalizePath(vaultPath);
-  if (!approvedVaults.has(normalized)) {
-    return false;
-  }
   currentVaultPath = normalized;
   await saveVaultState();
   return true;
 });
 
-// Get vault status (approved list + current vault)
+// Get vault status
 ipcMain.handle('vault:getStatus', async () => {
   return {
     currentVaultPath,
-    approvedVaults: Array.from(approvedVaults),
   };
 });
 

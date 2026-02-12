@@ -28,15 +28,12 @@ export const VaultManager: React.FC<{ onOpenVault: (vault: Vault) => void | Prom
     } catch {}
     return true;
   });
-  const [status, setStatus] = useState<{ currentVaultPath: string | null; approvedVaults: string[] }>({
-    currentVaultPath: null,
-    approvedVaults: [],
-  });
+  const [currentVaultPath, setCurrentVaultPath] = useState<string | null>(null);
 
   const refreshStatus = async () => {
     if (window.electronAPI?.vault?.getStatus) {
       const next = await window.electronAPI.vault.getStatus();
-      setStatus(next);
+      setCurrentVaultPath(next.currentVaultPath);
     }
   };
 
@@ -89,23 +86,6 @@ export const VaultManager: React.FC<{ onOpenVault: (vault: Vault) => void | Prom
     saveVaultsToLocalStorage(updated);
   };
 
-  const handleReapprove = async (vault: Vault) => {
-    const folder = await openVault();
-    if (!folder) return;
-    const normalized = folder;
-    if (normalized !== vault.path) {
-      const ok = confirm('This path differs from the original vault. Replace the saved path?');
-      if (!ok) return;
-    }
-    const name = normalized.split(/[\\/]/).pop() || normalized;
-    const updatedVault: Vault = { name, path: normalized };
-    const updated = vaults.map(v => (v.path === vault.path ? updatedVault : v));
-    setVaults(updated);
-    saveVaultsToLocalStorage(updated);
-    await onOpenVault(updatedVault);
-    await refreshStatus();
-  };
-
   if (loading) return <div className="p-8 text-gray-500">Loading vaults...</div>;
 
   return (
@@ -133,34 +113,19 @@ export const VaultManager: React.FC<{ onOpenVault: (vault: Vault) => void | Prom
               <div className="min-w-0 flex-1">
                 <div className="font-semibold text-gray-900 dark:text-gray-100">{vault.name}</div>
                 <div className="text-xs text-gray-600 dark:text-gray-300 truncate" title={vault.path}>{vault.path}</div>
-                <div className="mt-1 text-xs">
-                  {status.currentVaultPath === vault.path && (
+                {currentVaultPath === vault.path && (
+                  <div className="mt-1 text-xs">
                     <span className="px-2 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">Active</span>
-                  )}
-                  {status.approvedVaults.includes(vault.path) && status.currentVaultPath !== vault.path && (
-                    <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Approved</span>
-                  )}
-                  {!status.approvedVaults.includes(vault.path) && (
-                    <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Needs approval</span>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                {!status.approvedVaults.includes(vault.path) ? (
-                  <button
-                    className="px-3 py-1 bg-amber-500 text-white rounded hover:bg-amber-600 whitespace-nowrap"
-                    onClick={() => handleReapprove(vault)}
-                  >
-                    Re-approve
-                  </button>
-                ) : (
-                  <button
-                    className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 whitespace-nowrap"
-                    onClick={() => openVaultEntry(vault)}
-                  >
-                    Open
-                  </button>
-                )}
+                <button
+                  className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 whitespace-nowrap"
+                  onClick={() => openVaultEntry(vault)}
+                >
+                  Open
+                </button>
                 <button
                   className="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 text-sm whitespace-nowrap"
                   onClick={() => handleRemoveVault(vault)}
