@@ -1,0 +1,70 @@
+/**
+ * @name Midnight
+ * @author Notebook Team
+ * @description Deep midnight blue theme
+ * @version 1.0.0
+ * @website https://github.com/example/notebook
+ * @cssvar --theme-bg #0f172a "Main background color"
+ * @cssvar --theme-sidebar #020617 "Sidebar background"
+ * @cssvar --theme-accent #3b82f6 "Accent/highlight color"
+ * @cssvar --theme-text #e2e8f0 "Primary text color"
+ * @cssvar --theme-text-muted #64748b "Muted text color"
+ * @cssvar --theme-border #1e293b "Border color"
+ */
+
+:root {
+  --theme-bg: #0f172a;
+  --theme-sidebar: #020617;
+  --theme-accent: #3b82f6;
+  --theme-text: #e2e8f0;
+  --theme-text-muted: #64748b;
+  --theme-border: #1e293b;
+  
+  --background: #0f172a;
+  --foreground: #e2e8f0;
+  --border: #1e293b;
+  --accent: #3b82f6;
+  --muted: #64748b;
+  --card: #020617;
+  --panel: #020617;
+  color-scheme: dark;
+}
+
+.dark {
+  --background: #0f172a;
+  --foreground: #e2e8f0;
+  --border: #1e293b;
+  --accent: #3b82f6;
+  --muted: #64748b;
+  --card: #020617;
+  --panel: #020617;
+}
+
+body { background-color: #0f172a !important; color: #e2e8f0 !important; }
+
+.app-container, .app-main { background-color: var(--theme-bg) !important; color: var(--theme-text) !important; }
+.app-sidebar, .app-explorer { background-color: var(--theme-sidebar) !important; color: var(--theme-text) !important; }
+
+textarea, input, .prose, [class*="editor"], [class*="Editor"] { background-color: var(--theme-bg) !important; color: var(--theme-text) !important; }
+
+.flexlayout__layout, .flexlayout__tab, .flexlayout__tabset, .flexlayout__tabset_content { background-color: var(--theme-bg) !important; color: var(--theme-text) !important; }
+.flexlayout__tab_button { background-color: var(--theme-sidebar) !important; color: var(--theme-text) !important; }
+.flexlayout__tab_button--selected { background-color: var(--theme-bg) !important; border-bottom-color: var(--theme-accent) !important; }
+
+.prose, .prose h1, .prose h2, .prose h3, .prose h4, .prose p, .prose li { color: var(--theme-text) !important; }
+.prose code { background-color: var(--theme-sidebar) !important; color: #93c5fd !important; }
+.prose pre { background-color: var(--theme-sidebar) !important; }
+.prose a { color: var(--theme-accent) !important; }
+
+[class*="border-gray"], [class*="border-neutral"] { border-color: var(--theme-border) !important; }
+[class*="text-gray-9"], [class*="text-gray-8"], [class*="text-gray-7"], [class*="text-foreground"], .dark\:text-gray-100 { color: var(--theme-text) !important; }
+[class*="text-gray-5"], [class*="text-gray-4"], [class*="text-muted"] { color: var(--theme-text-muted) !important; }
+[class*="bg-white"], [class*="bg-gray-9"], [class*="bg-background"], .dark\:bg-gray-900 { background-color: var(--theme-bg) !important; }
+[class*="bg-gray-1"], [class*="bg-gray-8"], [class*="bg-card"] { background-color: var(--theme-sidebar) !important; }
+
+[class*="Modal"], [role="dialog"] { background-color: var(--theme-bg) !important; color: var(--theme-text) !important; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--theme-bg); }
+::-webkit-scrollbar-thumb { background: var(--theme-border); border-radius: 4px; }
+::selection { background-color: var(--theme-accent); color: #0f172a; }

@@ -1,0 +1,186 @@
+/**
+ * @name Dracula
+ * @author Notebook Team
+ * @description Classic Dracula dark color scheme
+ * @version 1.0.0
+ * @website https://draculatheme.com
+ * @cssvar --theme-bg #282a36 "Main background color"
+ * @cssvar --theme-sidebar #21222c "Sidebar background"
+ * @cssvar --theme-accent #bd93f9 "Accent/highlight color"
+ * @cssvar --theme-text #f8f8f2 "Primary text color"
+ * @cssvar --theme-text-muted #6272a4 "Muted text color"
+ * @cssvar --theme-border #44475a "Border color"
+ */
+
+:root {
+  --theme-bg: #282a36;
+  --theme-sidebar: #21222c;
+  --theme-accent: #bd93f9;
+  --theme-text: #f8f8f2;
+  --theme-text-muted: #6272a4;
+  --theme-border: #44475a;
+  
+  /* Map to CSS custom properties used by app */
+  --background: #282a36;
+  --foreground: #f8f8f2;
+  --border: #44475a;
+  --accent: #bd93f9;
+  --muted: #6272a4;
+  --card: #21222c;
+  --panel: #21222c;
+  color-scheme: dark;
+}
+
+/* Override dark mode with Dracula colors */
+.dark {
+  --background: #282a36;
+  --foreground: #f8f8f2;
+  --border: #44475a;
+  --accent: #bd93f9;
+  --muted: #6272a4;
+  --card: #21222c;
+  --panel: #21222c;
+  color-scheme: dark;
+}
+
+/* Force Dracula colors everywhere */
+body {
+  background-color: #282a36 !important;
+  color: #f8f8f2 !important;
+}
+
+/* Main app areas */
+.app-container,
+.app-main,
+.app-sidebar,
+.app-explorer {
+  background-color: var(--theme-bg) !important;
+  color: var(--theme-text) !important;
+}
+
+.app-sidebar {
+  background-color: var(--theme-sidebar) !important;
+}
+
+.app-explorer {
+  background-color: var(--theme-sidebar) !important;
+}
+
+/* Editor and text areas */
+textarea,
+input,
+.prose,
+[class*="editor"],
+[class*="Editor"] {
+  background-color: var(--theme-bg) !important;
+  color: var(--theme-text) !important;
+}
+
+/* FlexLayout overrides */
+.flexlayout__layout,
+.flexlayout__tab,
+.flexlayout__tabset,
+.flexlayout__tabset_content,
+.flexlayout__tabset_tabbar_outer,
+.flexlayout__tabset_tabbar_inner {
+  background-color: var(--theme-bg) !important;
+  color: var(--theme-text) !important;
+}
+
+.flexlayout__tab_button {
+  background-color: var(--theme-sidebar) !important;
+  color: var(--theme-text) !important;
+}
+
+.flexlayout__tab_button--selected {
+  background-color: var(--theme-bg) !important;
+  border-bottom-color: var(--theme-accent) !important;
+}
+
+/* Prose/Markdown content */
+.prose,
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6,
+.prose p, .prose li, .prose span {
+  color: var(--theme-text) !important;
+}
+
+.prose code {
+  background-color: var(--theme-sidebar) !important;
+  color: #50fa7b !important;
+}
+
+.prose pre {
+  background-color: var(--theme-sidebar) !important;
+}
+
+.prose blockquote {
+  border-left-color: var(--theme-accent) !important;
+  color: var(--theme-text-muted) !important;
+}
+
+.prose a {
+  color: #8be9fd !important;
+}
+
+/* Borders */
+[class*="border-gray"],
+[class*="border-neutral"] {
+  border-color: var(--theme-border) !important;
+}
+
+/* Text colors - override Tailwind */
+[class*="text-gray-9"],
+[class*="text-gray-8"],
+[class*="text-gray-7"],
+[class*="text-neutral-9"],
+[class*="text-neutral-8"],
+[class*="text-neutral-1"],
+[class*="text-foreground"],
+.dark\:text-gray-100,
+.dark\:text-gray-200,
+.dark\:text-gray-300 {
+  color: var(--theme-text) !important;
+}
+
+[class*="text-gray-5"],
+[class*="text-gray-4"],
+[class*="text-neutral-5"],
+[class*="text-neutral-4"],
+[class*="text-muted"] {
+  color: var(--theme-text-muted) !important;
+}
+
+/* Background colors - override Tailwind */
+[class*="bg-white"],
+[class*="bg-gray-9"],
+[class*="bg-neutral-9"],
+[class*="bg-background"],
+.dark\:bg-gray-900,
+.dark\:bg-gray-800 {
+  background-color: var(--theme-bg) !important;
+}
+
+[class*="bg-gray-1"],
+[class*="bg-gray-5"],
+[class*="bg-neutral-1"],
+[class*="bg-neutral-8"],
+[class*="bg-card"],
+[class*="bg-panel"] {
+  background-color: var(--theme-sidebar) !important;
+}
+
+/* Modals and overlays */
+[class*="Modal"],
+[role="dialog"] {
+  background-color: var(--theme-bg) !important;
+  color: var(--theme-text) !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--theme-bg); }
+::-webkit-scrollbar-thumb { background: var(--theme-border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--theme-accent); }
+
+/* Selection */
+::selection { background-color: #44475a; color: #f8f8f2; }

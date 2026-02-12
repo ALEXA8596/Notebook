@@ -1,0 +1,70 @@
+/**
+ * @name Solarized
+ * @author Notebook Team
+ * @description Precision colors for machines and people (Dark)
+ * @version 1.0.0
+ * @website https://ethanschoonover.com/solarized
+ * @cssvar --theme-bg #002b36 "Main background color"
+ * @cssvar --theme-sidebar #073642 "Sidebar background"
+ * @cssvar --theme-accent #268bd2 "Accent/highlight color"
+ * @cssvar --theme-text #839496 "Primary text color"
+ * @cssvar --theme-text-muted #657b83 "Muted text color"
+ * @cssvar --theme-border #094959 "Border color"
+ */
+
+:root {
+  --theme-bg: #002b36;
+  --theme-sidebar: #073642;
+  --theme-accent: #268bd2;
+  --theme-text: #839496;
+  --theme-text-muted: #657b83;
+  --theme-border: #094959;
+  
+  --background: #002b36;
+  --foreground: #839496;
+  --border: #094959;
+  --accent: #268bd2;
+  --muted: #657b83;
+  --card: #073642;
+  --panel: #073642;
+  color-scheme: dark;
+}
+
+.dark {
+  --background: #002b36;
+  --foreground: #839496;
+  --border: #094959;
+  --accent: #268bd2;
+  --muted: #657b83;
+  --card: #073642;
+  --panel: #073642;
+}
+
+body { background-color: #002b36 !important; color: #839496 !important; }
+
+.app-container, .app-main { background-color: var(--theme-bg) !important; color: var(--theme-text) !important; }
+.app-sidebar, .app-explorer { background-color: var(--theme-sidebar) !important; color: var(--theme-text) !important; }
+
+textarea, input, .prose, [class*="editor"], [class*="Editor"] { background-color: var(--theme-bg) !important; color: var(--theme-text) !important; }
+
+.flexlayout__layout, .flexlayout__tab, .flexlayout__tabset, .flexlayout__tabset_content { background-color: var(--theme-bg) !important; color: var(--theme-text) !important; }
+.flexlayout__tab_button { background-color: var(--theme-sidebar) !important; color: var(--theme-text) !important; }
+.flexlayout__tab_button--selected { background-color: var(--theme-bg) !important; border-bottom-color: var(--theme-accent) !important; }
+
+.prose, .prose h1, .prose h2, .prose h3, .prose h4, .prose p, .prose li { color: var(--theme-text) !important; }
+.prose code { background-color: var(--theme-sidebar) !important; color: #859900 !important; }
+.prose pre { background-color: var(--theme-sidebar) !important; }
+.prose a { color: var(--theme-accent) !important; }
+
+[class*="border-gray"], [class*="border-neutral"] { border-color: var(--theme-border) !important; }
+[class*="text-gray-9"], [class*="text-gray-8"], [class*="text-gray-7"], [class*="text-foreground"], .dark\:text-gray-100 { color: var(--theme-text) !important; }
+[class*="text-gray-5"], [class*="text-gray-4"], [class*="text-muted"] { color: var(--theme-text-muted) !important; }
+[class*="bg-white"], [class*="bg-gray-9"], [class*="bg-background"], .dark\:bg-gray-900 { background-color: var(--theme-bg) !important; }
+[class*="bg-gray-1"], [class*="bg-gray-8"], [class*="bg-card"] { background-color: var(--theme-sidebar) !important; }
+
+[class*="Modal"], [role="dialog"] { background-color: var(--theme-bg) !important; color: var(--theme-text) !important; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--theme-bg); }
+::-webkit-scrollbar-thumb { background: var(--theme-border); border-radius: 4px; }
+::selection { background-color: var(--theme-accent); color: #002b36; }
