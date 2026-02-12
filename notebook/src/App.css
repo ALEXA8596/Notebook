@@ -324,3 +324,15 @@ textarea {
 .cm-obsidian-wrapper .cm-scroller::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
+
+/* Obsidian-like document layout */
+.cm-obsidian-wrapper .cm-scroller {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.6 !important;
+}
+
+.cm-obsidian-wrapper .cm-content {
+  max-width: 900px !important;
+  margin: 0 auto !important;
+  padding: 40px 60px !important; /* Comfortable writing area */
+}

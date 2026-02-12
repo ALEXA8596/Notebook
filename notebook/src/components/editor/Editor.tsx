@@ -319,9 +319,9 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange, showStatusBar
             {block.type === 'text' && (
               <TextBlock 
                 content={block.content} 
-                onChange={(c) => handleBlockChange(block.id, c)} 
+                onChange={(c: string) => handleBlockChange(block.id, c)} 
                 filePath={activeFile || undefined}
-                onContextMenu={(e, idx) => {
+                onContextMenu={(e: React.MouseEvent, idx?: number) => {
                   e.stopPropagation();
                 handleContextMenu(e, block.id, idx);
               }}

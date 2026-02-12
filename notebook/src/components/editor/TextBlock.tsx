@@ -38,80 +38,141 @@ const colors = {
 
 // Obsidian-like syntax highlighting
 const obsidianHighlightStyle = HighlightStyle.define([
-  { tag: tags.heading1, color: '#f5f5f5', fontWeight: 'bold', fontSize: '1.8em' },
-  { tag: tags.heading2, color: '#f5f5f5', fontWeight: 'bold', fontSize: '1.5em' },
-  { tag: tags.heading3, color: '#f5f5f5', fontWeight: 'bold', fontSize: '1.3em' },
-  { tag: tags.heading4, color: '#f5f5f5', fontWeight: 'bold', fontSize: '1.1em' },
-  { tag: tags.heading5, color: '#f5f5f5', fontWeight: 'bold', fontSize: '1.05em' },
-  { tag: tags.heading6, color: '#f5f5f5', fontWeight: 'bold', fontSize: '1em' },
-  { tag: tags.strong, color: '#f5f5f5', fontWeight: 'bold' },
-  { tag: tags.emphasis, color: '#f5f5f5', fontStyle: 'italic' },
-  { tag: tags.strikethrough, color: '#a3a3a3', textDecoration: 'line-through' },
-  { tag: tags.link, color: '#7c3aed' },
-  { tag: tags.url, color: '#7c3aed' },
-  { tag: tags.monospace, color: '#f87171', backgroundColor: 'rgba(248, 113, 113, 0.1)', borderRadius: '3px', padding: '0 4px' },
-  { tag: tags.quote, color: '#a3a3a3', fontStyle: 'italic', borderLeft: '3px solid #7c3aed', paddingLeft: '12px' },
-  { tag: tags.list, color: '#f5f5f5' },
-  { tag: tags.meta, color: '#6b7280' },
-  { tag: tags.processingInstruction, color: '#6b7280' },
-  { tag: tags.comment, color: '#6b7280' },
+  // Headings — Obsidian uses decreasing purple-ish accent tones
+  { tag: tags.heading1, color: '#d4bfff', fontSize: '1.6em', fontWeight: '700' },
+  { tag: tags.heading2, color: '#c4a8ff', fontSize: '1.4em', fontWeight: '600' },
+  { tag: tags.heading3, color: '#b291ff', fontSize: '1.25em', fontWeight: '600' },
+  { tag: tags.heading4, color: '#a17bff', fontSize: '1.1em', fontWeight: '600' },
+  { tag: tags.heading5, color: '#9466ff', fontSize: '1.05em', fontWeight: '600' },
+  { tag: tags.heading6, color: '#8855ee', fontSize: '1em', fontWeight: '600' },
+
+  // Emphasis
+  { tag: tags.emphasis, color: '#e5c07b', fontStyle: 'italic' },
+  { tag: tags.strong, color: '#e06c75', fontWeight: '700' },
+  { tag: tags.strikethrough, color: '#7f848e', textDecoration: 'line-through' },
+
+  // Code
+  { tag: tags.monospace, color: '#98c379', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: '3px', padding: '1px 4px' },
+
+  // Links  
+  { tag: tags.link, color: '#7c3aed', textDecoration: 'underline' },
+  { tag: tags.url, color: '#61afef' },
+
+  // Lists
+  { tag: tags.list, color: '#c678dd' },
+
+  // Quotes
+  { tag: tags.quote, color: '#a1a1aa', fontStyle: 'italic' },
+
+  // Meta / processing (markdown markers like #, *, >, etc.)
+  { tag: tags.processingInstruction, color: '#5c6370' },
+  { tag: tags.meta, color: '#5c6370' },
+
+  // Content
+  { tag: tags.content, color: '#dcddde' },
+  { tag: tags.contentSeparator, color: '#5c6370' },
 ]);
 
-// Custom CodeMirror theme for Obsidian-like appearance
 const obsidianTheme = EditorView.theme({
   '&': {
-    backgroundColor: 'transparent',
-    color: colors.text,
+    color: '#dcddde',
+    backgroundColor: '#1e1e1e',
     fontSize: '16px',
-    lineHeight: '1.75',
+    height: '100%',
+  },
+  '&.cm-focused': {
+    outline: 'none',
   },
   '.cm-content': {
-    caretColor: colors.accent,
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif',
-    padding: '0',
+    caretColor: '#a17bff',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", sans-serif',
+    padding: '16px 0',
+    lineHeight: '1.8',
+    maxWidth: '800px',
+    margin: '0 auto',
   },
   '.cm-cursor, .cm-dropCursor': {
-    borderLeftColor: colors.accent,
+    borderLeftColor: '#a17bff',
     borderLeftWidth: '2px',
   },
-  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
-    backgroundColor: 'rgba(124, 58, 237, 0.3)',
-  },
-  '.cm-activeLine': {
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  '.cm-scroller': {
+    overflow: 'auto',
+    padding: '0 48px',
   },
   '.cm-gutters': {
-    backgroundColor: 'transparent',
-    color: colors.textMuted,
-    border: 'none',
+    display: 'none',
+  },
+  // Selection
+  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
+    backgroundColor: 'rgba(124, 58, 237, 0.25) !important',
+  },
+  '.cm-selectionMatch': {
+    backgroundColor: 'rgba(124, 58, 237, 0.12)',
+  },
+  // Active line
+  '.cm-activeLine': {
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
   },
   '.cm-activeLineGutter': {
     backgroundColor: 'transparent',
   },
-  '.cm-line': {
-    padding: '0 4px',
+  // Matching brackets
+  '&.cm-focused .cm-matchingBracket': {
+    backgroundColor: 'rgba(124, 58, 237, 0.3)',
+    outline: '1px solid rgba(124, 58, 237, 0.5)',
   },
-  '.cm-placeholder': {
-    color: colors.textMuted,
-    fontStyle: 'italic',
+  // Autocomplete / tooltips
+  '.cm-tooltip': {
+    backgroundColor: '#2d2d2d',
+    border: '1px solid #404040',
+    borderRadius: '8px',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+    overflow: 'hidden',
   },
-  // Header styling
-  '.cm-header-1': { fontSize: '1.8em', fontWeight: 'bold' },
-  '.cm-header-2': { fontSize: '1.5em', fontWeight: 'bold' },
-  '.cm-header-3': { fontSize: '1.3em', fontWeight: 'bold' },
-  '.cm-header-4': { fontSize: '1.1em', fontWeight: 'bold' },
-  '.cm-header-5': { fontSize: '1.05em', fontWeight: 'bold' },
-  '.cm-header-6': { fontSize: '1em', fontWeight: 'bold' },
-  // Blockquote styling
-  '.cm-blockquote': {
-    borderLeft: '3px solid ' + colors.accent,
-    paddingLeft: '12px',
-    color: colors.textMuted,
+  '.cm-tooltip-autocomplete': {
+    '& > ul': {
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      fontSize: '13px',
+    },
+    '& > ul > li': {
+      padding: '4px 12px',
+      color: '#dcddde',
+    },
+    '& > ul > li[aria-selected]': {
+      backgroundColor: '#7c3aed',
+      color: '#ffffff',
+    },
   },
-  // Code block styling
-  '.cm-codeblock-delimiter': {
-    color: colors.textMuted,
-    opacity: '0.6',
+  // Search panel
+  '.cm-panels': {
+    backgroundColor: '#252525',
+    borderBottom: '1px solid #404040',
+    color: '#dcddde',
+  },
+  '.cm-searchMatch': {
+    backgroundColor: 'rgba(229, 192, 123, 0.25)',
+    outline: '1px solid rgba(229, 192, 123, 0.4)',
+  },
+  '.cm-searchMatch.cm-searchMatch-selected': {
+    backgroundColor: 'rgba(124, 58, 237, 0.35)',
+  },
+  // Fold placeholder
+  '.cm-foldPlaceholder': {
+    backgroundColor: '#2d2d2d',
+    border: '1px solid #404040',
+    color: '#888',
+    borderRadius: '4px',
+    padding: '0 6px',
+  },
+  // Hide gutters (line numbers, fold markers, etc.) to match Obsidian clean look
+  '.cm-gutters': {
+    display: 'none !important',
+  },
+  '.cm-foldGutter': {
+    display: 'none !important',
+  },
+  '.cm-lineNumbers': {
+    display: 'none !important',
   },
 }, { dark: true });
 
@@ -248,7 +309,7 @@ export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onConte
   const [viewMode, setViewMode] = useState<ViewMode>('live');
   const [isTruncated, setIsTruncated] = useState(false);
   const editorContainerRef = useRef<HTMLDivElement>(null);
-  const previewRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<HTMLDivElement | null>(null);
   const cmContainerRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -383,47 +444,31 @@ export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onConte
     });
 
     const extensions = [
-      // Basic setup
-      lineNumbers(),
-      highlightActiveLineGutter(),
-      highlightSpecialChars(),
+      // Core
       history(),
-      foldGutter(),
-      drawSelection(),
-      dropCursor(),
-      EditorState.allowMultipleSelections.of(true),
       indentOnInput(),
-      bracketMatching(),
       closeBrackets(),
-      autocompletion({
-        override: [wikiLinkCompletion],
-      }),
-      rectangularSelection(),
-      crosshairCursor(),
-      highlightActiveLine(),
       highlightSelectionMatches(),
+      EditorView.lineWrapping,
       
-      // Keymaps
+      // Markdown language with nested code highlighting
+      markdown({ base: markdownLanguage, codeLanguages: languages }),
+      
+      // Theme
+      obsidianTheme,
+      syntaxHighlighting(obsidianHighlightStyle),
+      
+      // Keybindings
       keymap.of([
-        ...closeBracketsKeymap,
         ...defaultKeymap,
-        ...searchKeymap,
         ...historyKeymap,
-        ...foldKeymap,
-        ...completionKeymap,
-        ...lintKeymap,
+        ...closeBracketsKeymap,
+        ...searchKeymap,
         indentWithTab,
       ]),
       
       // Smart list continuation
       smartListExtension,
-      
-      // Markdown support
-      markdown({ base: markdownLanguage, codeLanguages: languages }),
-      
-      // Theming
-      obsidianTheme,
-      syntaxHighlighting(obsidianHighlightStyle),
       
       // Live preview (controlled by compartment)
       livePreviewCompartment.of(viewMode === 'live' ? livePreviewExtension(currentPath || undefined) : []),
@@ -890,6 +935,7 @@ Add tasks with - [ ] syntax.`),
           <Sparkles size={13} className="inline mr-1" />
           Live
         </button>
+        {/*
         <button
           onClick={() => setViewMode('edit')}
           className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${viewMode === 'edit' ? 'bg-purple-600 text-white' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-300 dark:hover:bg-gray-600'}`}
@@ -914,6 +960,7 @@ Add tasks with - [ ] syntax.`),
           <Eye size={13} className="inline mr-1" />
           Preview
         </button>
+        */}
       </div>
       
       <div className="h-4 w-px bg-gray-200 dark:bg-gray-700 mx-2" />
@@ -1009,7 +1056,7 @@ Add tasks with - [ ] syntax.`),
   ), [viewMode, isTruncated]);
 
   // Memoized Preview component for performance
-  const Preview = useMemo(() => ({ previewRef }: { previewRef?: React.RefObject<HTMLDivElement> }) => (
+  const Preview = useMemo(() => ({ previewRef }: { previewRef?: React.RefObject<HTMLDivElement | null> }) => (
     <div ref={previewRef} className="w-full h-full p-8 overflow-auto bg-white dark:bg-gray-900">
       <div className="max-w-4xl mx-auto prose dark:prose-invert prose-lg
         prose-headings:font-semibold prose-headings:tracking-tight
