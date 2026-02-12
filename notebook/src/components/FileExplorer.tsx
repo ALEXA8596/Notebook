@@ -1,5 +1,5 @@
-import React, { useState, DragEvent, useRef, useEffect } from 'react';
-import { ChevronRight, ChevronDown, File, FilePlus, FolderPlus, ImagePlus, Folder, Pencil, GitBranch, Code, Kanban, Table, FileText, Plus, ChevronUp, Trash2, Edit2, Copy, FolderInput, ExternalLink, PanelRight, FileSpreadsheet, Globe, History, Clipboard } from 'lucide-react';
+import React, { useState, DragEvent, useRef, useEffect, useCallback, useMemo } from 'react';
+import { ChevronRight, ChevronDown, File, FilePlus, FolderPlus, ImagePlus, Folder, Pencil, GitBranch, Code, Kanban, Table, FileText, Plus, ChevronUp, Trash2, Edit2, Copy, FolderInput, ExternalLink, PanelRight, FileSpreadsheet, Globe, History, Clipboard, Scissors, Search, X, ArrowUpDown, ChevronsUpDown, FolderOpen, FolderClosed } from 'lucide-react';
 import { FileEntry, useAppStore } from '../store/store';
 import { createFile, createFolder, loadFileStructure } from '../lib/fileSystem';
 import clsx from 'clsx';
@@ -18,23 +18,86 @@ const FILE_TYPES = [
   { extension: '.json', label: 'JSON', icon: Code, defaultContent: '{\n  \n}' },
 ];
 
+// Sort options
+type SortOption = 'name-asc' | 'name-desc' | 'date-asc' | 'date-desc' | 'type';
+
 interface FileNodeProps {
   entry: FileEntry;
   depth?: number;
   onMoveFile: (sourcePath: string, targetFolder: string) => void;
   onContextMenu: (e: React.MouseEvent, entry: FileEntry) => void;
   onExternalFileDrop: (files: File[], targetFolder: string) => void;
+  selectedPaths: Set<string>;
+  onSelect: (path: string, entry: FileEntry, e: React.MouseEvent) => void;
+  lastSelectedPath: string | null;
+  allEntries: FileEntry[];
+  focusedPath: string | null;
+  onSetFocused: (path: string | null) => void;
+  expandedFolders: Set<string>;
+  onToggleFolder: (path: string) => void;
+  searchQuery: string;
 }
 
-const FileNode: React.FC<FileNodeProps> = ({ entry, depth = 0, onMoveFile, onContextMenu, onExternalFileDrop }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const { openFile, activeFile } = useAppStore();
+// Flatten entries for shift-select range
+const flattenEntries = (entries: FileEntry[], expanded: Set<string>): FileEntry[] => {
+  const result: FileEntry[] = [];
+  const traverse = (items: FileEntry[]) => {
+    for (const item of items) {
+      result.push(item);
+      if (item.isDirectory && item.children && expanded.has(item.path)) {
+        traverse(item.children);
+      }
+    }
+  };
+  traverse(entries);
+  return result;
+};
 
-  const handleClick = () => {
+const FileNode: React.FC<FileNodeProps> = ({ 
+  entry, 
+  depth = 0, 
+  onMoveFile, 
+  onContextMenu, 
+  onExternalFileDrop,
+  selectedPaths,
+  onSelect,
+  lastSelectedPath,
+  allEntries,
+  focusedPath,
+  onSetFocused,
+  expandedFolders,
+  onToggleFolder,
+  searchQuery,
+}) => {
+  const [isDragOver, setIsDragOver] = useState(false);
+  const { openFile, activeFile, currentPath } = useAppStore();
+  const isSelected = selectedPaths.has(entry.path);
+  const isFocused = focusedPath === entry.path;
+  const isOpen = expandedFolders.has(entry.path);
+
+  // Filter by search query
+  const matchesSearch = !searchQuery || entry.name.toLowerCase().includes(searchQuery.toLowerCase());
+  const hasMatchingChildren = entry.isDirectory && entry.children?.some(child => 
+    child.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (child.isDirectory && child.children?.some(c => c.name.toLowerCase().includes(searchQuery.toLowerCase())))
+  );
+
+  if (searchQuery && !matchesSearch && !hasMatchingChildren) {
+    return null;
+  }
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onSelect(entry.path, entry, e);
+    onSetFocused(entry.path);
+    
     if (entry.isDirectory) {
-      setIsOpen(!isOpen);
-    } else {
+      // Double-click to toggle folder
+      if (e.detail === 2) {
+        onToggleFolder(entry.path);
+      }
+    } else if (e.detail === 2) {
+      // Double-click opens file
       openFile(entry.path);
     }
   };
@@ -42,12 +105,45 @@ const FileNode: React.FC<FileNodeProps> = ({ entry, depth = 0, onMoveFile, onCon
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    // If right-clicking on unselected item, select it
+    if (!selectedPaths.has(entry.path)) {
+      onSelect(entry.path, entry, e);
+    }
     onContextMenu(e, entry);
   };
 
   const handleDragStart = (e: DragEvent<HTMLDivElement>) => {
-    e.dataTransfer.setData('text/plain', entry.path);
-    e.dataTransfer.effectAllowed = 'move';
+    // Set data for internal moves
+    const paths = selectedPaths.size > 0 && selectedPaths.has(entry.path)
+      ? Array.from(selectedPaths)
+      : [entry.path];
+    
+    e.dataTransfer.setData('text/plain', JSON.stringify(paths));
+    e.dataTransfer.effectAllowed = 'copyMove';
+    
+    // For native drag to external apps - set file:// URL
+    // This enables dragging to Chrome, other file explorers, etc.
+    if (paths.length === 1) {
+      const filePath = paths[0];
+      // Windows file URI format
+      const fileUrl = `file:///${filePath.replace(/\\/g, '/').replace(/^\//, '')}`;
+      e.dataTransfer.setData('text/uri-list', fileUrl);
+      
+      // Also set the DownloadURL for Chrome compatibility
+      const fileName = filePath.split(/[\\/]/).pop() || 'file';
+      const mimeType = getMimeType(fileName);
+      e.dataTransfer.setData('DownloadURL', `${mimeType}:${fileName}:${fileUrl}`);
+    }
+
+    // Set drag image
+    if (selectedPaths.size > 1 && selectedPaths.has(entry.path)) {
+      const dragBadge = document.createElement('div');
+      dragBadge.textContent = `${selectedPaths.size} items`;
+      dragBadge.style.cssText = 'padding: 4px 8px; background: #7c3aed; color: white; border-radius: 4px; font-size: 12px;';
+      document.body.appendChild(dragBadge);
+      e.dataTransfer.setDragImage(dragBadge, 0, 0);
+      setTimeout(() => dragBadge.remove(), 0);
+    }
   };
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
@@ -78,21 +174,40 @@ const FileNode: React.FC<FileNodeProps> = ({ entry, depth = 0, onMoveFile, onCon
         return;
       }
       
-      // Internal file move
-      const sourcePath = e.dataTransfer.getData('text/plain');
-      if (sourcePath && sourcePath !== entry.path) {
-        onMoveFile(sourcePath, entry.path);
+      // Internal file move (may be multiple files)
+      const data = e.dataTransfer.getData('text/plain');
+      if (data) {
+        try {
+          const paths = JSON.parse(data) as string[];
+          for (const sourcePath of paths) {
+            if (sourcePath !== entry.path && !entry.path.startsWith(sourcePath + '/')) {
+              onMoveFile(sourcePath, entry.path);
+            }
+          }
+        } catch {
+          // Fallback for single path string
+          if (data !== entry.path) {
+            onMoveFile(data, entry.path);
+          }
+        }
       }
     }
+  };
+
+  const handleToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onToggleFolder(entry.path);
   };
 
   return (
     <div>
       <div 
         className={clsx(
-          "flex items-center py-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 select-none transition-colors rounded",
-          activeFile === entry.path && "bg-gray-200 dark:bg-gray-800 font-medium",
-          isDragOver && entry.isDirectory && "bg-gray-300 dark:bg-gray-700 ring-2 ring-gray-400 dark:ring-gray-500"
+          "flex items-center py-1 px-2 cursor-pointer select-none transition-colors",
+          isSelected && "bg-[#094771]",
+          !isSelected && "hover:bg-gray-200 dark:hover:bg-gray-800",
+          isFocused && "ring-1 ring-inset ring-blue-400",
+          isDragOver && entry.isDirectory && "bg-blue-200 dark:bg-blue-800 ring-2 ring-blue-500"
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={handleClick}
@@ -103,27 +218,45 @@ const FileNode: React.FC<FileNodeProps> = ({ entry, depth = 0, onMoveFile, onCon
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        <span className="mr-1 text-gray-500 flex-shrink-0">
+        {entry.isDirectory ? (
+          <span className="mr-1 text-gray-500 cursor-pointer w-4 flex-shrink-0 flex items-center justify-center" onClick={handleToggle}>
+            {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          </span>
+        ) : (
+          <span className="mr-1 text-gray-500 w-4 flex-shrink-0" />
+        )}
+        <span className="mr-1.5 text-gray-500 flex-shrink-0">
           {entry.isDirectory ? (
-            isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+            isOpen ? <FolderOpen size={16} className="text-yellow-500" /> : <FolderClosed size={16} className="text-yellow-500" />
           ) : (
             <File size={16} />
           )}
         </span>
-        <span className="flex-1 min-w-0 group relative">
-          <span className="truncate text-sm block" title={entry.name}>{entry.name}</span>
-          {/* Tooltip on hover showing full path */}
-          <div className="absolute left-0 top-full mt-1 hidden group-hover:block z-50 pointer-events-none whitespace-nowrap">
-            <div className="bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 px-2 py-1 rounded text-xs shadow-lg">
-              {entry.path}
-            </div>
-          </div>
-        </span>
+        <span className={clsx(
+          "truncate text-sm",
+          searchQuery && matchesSearch && "bg-yellow-500/30"
+        )}>{entry.name}</span>
       </div>
       {isOpen && entry.children && (
         <div>
           {entry.children.map((child) => (
-            <FileNode key={child.path} entry={child} depth={depth + 1} onMoveFile={onMoveFile} onContextMenu={onContextMenu} onExternalFileDrop={onExternalFileDrop} />
+            <FileNode 
+              key={child.path} 
+              entry={child} 
+              depth={depth + 1} 
+              onMoveFile={onMoveFile} 
+              onContextMenu={onContextMenu} 
+              onExternalFileDrop={onExternalFileDrop}
+              selectedPaths={selectedPaths}
+              onSelect={onSelect}
+              lastSelectedPath={lastSelectedPath}
+              allEntries={allEntries}
+              focusedPath={focusedPath}
+              onSetFocused={onSetFocused}
+              expandedFolders={expandedFolders}
+              onToggleFolder={onToggleFolder}
+              searchQuery={searchQuery}
+            />
           ))}
         </div>
       )}
@@ -131,11 +264,50 @@ const FileNode: React.FC<FileNodeProps> = ({ entry, depth = 0, onMoveFile, onCon
   );
 };
 
+// Get MIME type for drag operations
+const getMimeType = (fileName: string): string => {
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    'md': 'text/markdown',
+    'txt': 'text/plain',
+    'json': 'application/json',
+    'js': 'text/javascript',
+    'ts': 'text/typescript',
+    'html': 'text/html',
+    'css': 'text/css',
+    'png': 'image/png',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'gif': 'image/gif',
+    'svg': 'image/svg+xml',
+    'pdf': 'application/pdf',
+  };
+  return mimeTypes[ext || ''] || 'application/octet-stream';
+};
+
 export const FileExplorer: React.FC = () => {
-  const { fileStructure, currentPath, setFileStructure, closeFile, removeFileContent, renameFileContent, renameFilePath } = useAppStore();
+  const { fileStructure, currentPath, setFileStructure, closeFile } = useAppStore();
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
   const quickCreateRef = useRef<HTMLDivElement>(null);
   const explorerRef = useRef<HTMLDivElement>(null);
+  
+  // Multi-select state
+  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
+  const [lastSelectedPath, setLastSelectedPath] = useState<string | null>(null);
+  const [focusedPath, setFocusedPath] = useState<string | null>(null);
+  
+  // Expanded folders state (controlled from parent for shift-select)
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  
+  // Search filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  
+  // Sort state
+  const [sortOption, setSortOption] = useState<SortOption>('name-asc');
+  
+  // Cut mode for cut/paste (different from copy)
+  const [cutPaths, setCutPaths] = useState<Set<string>>(new Set());
   
   // Clipboard state for copy/paste
   const [clipboard, setClipboard] = useState<FileEntry | null>(null);
@@ -147,6 +319,91 @@ export const FileExplorer: React.FC = () => {
     entry: null,
     newName: ''
   });
+  
+  // Toggle folder expansion
+  const handleToggleFolder = useCallback((path: string) => {
+    setExpandedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  }, []);
+  
+  // Handle file/folder selection with multi-select support
+  const handleSelect = useCallback((path: string, entry: FileEntry, e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      // Toggle selection
+      setSelectedPaths(prev => {
+        const next = new Set(prev);
+        if (next.has(path)) {
+          next.delete(path);
+        } else {
+          next.add(path);
+        }
+        return next;
+      });
+      setLastSelectedPath(path);
+    } else if (e.shiftKey && lastSelectedPath) {
+      // Range selection
+      const flatList = flattenEntries(fileStructure, expandedFolders);
+      const lastIndex = flatList.findIndex(e => e.path === lastSelectedPath);
+      const currentIndex = flatList.findIndex(e => e.path === path);
+      
+      if (lastIndex !== -1 && currentIndex !== -1) {
+        const start = Math.min(lastIndex, currentIndex);
+        const end = Math.max(lastIndex, currentIndex);
+        const rangePaths = flatList.slice(start, end + 1).map(e => e.path);
+        setSelectedPaths(new Set(rangePaths));
+      }
+    } else {
+      // Single selection (also on single click for folders)
+      setSelectedPaths(new Set([path]));
+      setLastSelectedPath(path);
+    }
+  }, [lastSelectedPath, fileStructure, expandedFolders]);
+  
+  // Clear selection when clicking empty space
+  const handleExplorerClick = useCallback((e: React.MouseEvent) => {
+    // Only clear if clicking directly on the explorer background
+    if (e.target === e.currentTarget) {
+      setSelectedPaths(new Set());
+      setLastSelectedPath(null);
+      setFocusedPath(null);
+    }
+  }, []);
+  
+  // Sort file structure
+  const sortedFileStructure = useMemo(() => {
+    const sortEntries = (entries: FileEntry[]): FileEntry[] => {
+      const sorted = [...entries].sort((a, b) => {
+        // Folders always come first
+        if (a.isDirectory && !b.isDirectory) return -1;
+        if (!a.isDirectory && b.isDirectory) return 1;
+        
+        switch (sortOption) {
+          case 'name-asc':
+            return a.name.localeCompare(b.name);
+          case 'name-desc':
+            return b.name.localeCompare(a.name);
+          case 'type':
+            const extA = a.name.includes('.') ? a.name.split('.').pop() || '' : '';
+            const extB = b.name.includes('.') ? b.name.split('.').pop() || '' : '';
+            return extA.localeCompare(extB) || a.name.localeCompare(b.name);
+          default:
+            return a.name.localeCompare(b.name);
+        }
+      });
+      return sorted.map(entry => ({
+        ...entry,
+        children: entry.children ? sortEntries(entry.children) : undefined
+      }));
+    };
+    return sortEntries(fileStructure);
+  }, [fileStructure, sortOption]);
 
   // Close context menu when clicking outside
   useEffect(() => {
@@ -183,49 +440,33 @@ export const FileExplorer: React.FC = () => {
     setContextMenu({ x: e.clientX, y: e.clientY, entry: null });
   };
 
+  const { renameFilePath } = useAppStore();
+
   const handleRename = async () => {
     if (!renameModal.entry || !renameModal.newName.trim()) return;
     
     const oldPath = renameModal.entry.path;
     const parentDir = oldPath.substring(0, oldPath.lastIndexOf('/'));
     const newPath = `${parentDir}/${renameModal.newName}`;
+    const isDirectory = renameModal.entry.isDirectory;
     
-    // Collect all affected files before the rename
-    const affectedFiles: Array<{oldPath: string, newPath: string}> = [];
-    
-    if (renameModal.entry.isDirectory) {
-      // For folders, collect all open files within this folder
-      const openFiles = useAppStore.getState().openFiles;
-      const filesInFolder = openFiles.filter(f => f.startsWith(oldPath + '/'));
-      
-      for (const filePath of filesInFolder) {
-        const relativePath = filePath.substring(oldPath.length);
-        affectedFiles.push({
-          oldPath: filePath,
-          newPath: newPath + relativePath
-        });
+    // Collect all open file paths that will be affected by this rename
+    const { openFiles } = useAppStore.getState();
+    const affectedFiles: { oldPath: string; newPath: string }[] = [];
+    for (const filePath of openFiles) {
+      if (filePath === oldPath) {
+        affectedFiles.push({ oldPath: filePath, newPath });
+      } else if (isDirectory && filePath.startsWith(oldPath + '/')) {
+        affectedFiles.push({ oldPath: filePath, newPath: newPath + filePath.substring(oldPath.length) });
       }
-    } else {
-      // For single files
-      affectedFiles.push({ oldPath, newPath });
     }
     
     try {
       await window.electronAPI.moveFile(oldPath, newPath);
-      // Update store: transfer file content from old path to new path
-      if (renameModal.entry.isDirectory) {
-        renameFilePath(oldPath, newPath);
-      } else {
-        renameFileContent(oldPath, newPath);
-      }
-      
-      // Dispatch event to update tabs with all affected files
-      if (affectedFiles.length > 0) {
-        window.dispatchEvent(new CustomEvent('app-rename-file', {
-          detail: { affectedFiles }
-        }));
-      }
-      
+      // Update store paths (openFiles, activeFile, fileContents, etc.)
+      renameFilePath(oldPath, newPath);
+      // Notify App.tsx to update FlexLayout tabs — pass all affected tab paths
+      window.dispatchEvent(new CustomEvent('app-rename-file', { detail: { oldPath, newPath, affectedFiles } }));
       await refreshFileStructure();
       setRenameModal({ isOpen: false, entry: null, newName: '' });
     } catch (e) {
@@ -242,19 +483,8 @@ export const FileExplorer: React.FC = () => {
     if (!confirm(confirmMsg)) return;
     
     try {
-      // If deleting a folder, close all open files within it first
-      if (entry.isDirectory) {
-        const openFiles = useAppStore.getState().openFiles;
-        const filesToClose = openFiles.filter(f => f.startsWith(entry.path + '/'));
-        for (const filePath of filesToClose) {
-          removeFileContent(filePath);
-          window.dispatchEvent(new CustomEvent('app-close-file', { detail: { path: filePath } }));
-        }
-      }
-      
       await window.electronAPI.deleteFile(entry.path);
-      // Clean up store: remove file content and close file
-      removeFileContent(entry.path);
+      closeFile(entry.path);
       window.dispatchEvent(new CustomEvent('app-close-file', { detail: { path: entry.path } }));
       await refreshFileStructure();
     } catch (e) {
@@ -294,14 +524,6 @@ export const FileExplorer: React.FC = () => {
   // Paste from clipboard
   const handlePaste = async () => {
     if (!clipboard || !currentPath) return;
-    
-    // Validate clipboard source still exists before pasting
-    const sourceExists = await window.electronAPI.exists(clipboard.path);
-    if (!sourceExists) {
-      alert('The source file no longer exists. It may have been moved or deleted.');
-      setClipboard(null);
-      return;
-    }
     
     const entry = clipboard;
     const ext = entry.name.includes('.') ? '.' + entry.name.split('.').pop() : '';
@@ -351,30 +573,229 @@ export const FileExplorer: React.FC = () => {
     }
   };
 
-  // Keyboard shortcuts for copy/paste
+  // Keyboard shortcuts for copy/paste/delete and navigation
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
       // Only handle if file explorer is focused
       if (!explorerRef.current?.contains(document.activeElement) && 
           !explorerRef.current?.matches(':focus-within')) {
         return;
       }
       
-      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && contextMenu?.entry) {
+      // Delete key - delete selected files
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedPaths.size > 0) {
         e.preventDefault();
-        handleCopy(contextMenu.entry);
-        setContextMenu(null);
+        const pathsToDelete = Array.from(selectedPaths);
+        const count = pathsToDelete.length;
+        const confirmMsg = count === 1 
+          ? `Delete "${pathsToDelete[0].split(/[\\/]/).pop()}"?`
+          : `Delete ${count} items?`;
+        
+        if (!confirm(confirmMsg)) return;
+        
+        for (const path of pathsToDelete) {
+          try {
+            await window.electronAPI.deleteFile(path);
+            closeFile(path);
+            window.dispatchEvent(new CustomEvent('app-close-file', { detail: { path } }));
+          } catch (err) {
+            console.error('Failed to delete:', path, err);
+          }
+        }
+        setSelectedPaths(new Set());
+        await refreshFileStructure();
+        return;
       }
       
-      if ((e.ctrlKey || e.metaKey) && e.key === 'v' && clipboard) {
+      // Ctrl+X - Cut
+      if ((e.ctrlKey || e.metaKey) && e.key === 'x' && selectedPaths.size > 0) {
         e.preventDefault();
-        handlePaste();
+        setCutPaths(new Set(selectedPaths));
+        setClipboard(null); // Clear copy clipboard
+        return;
+      }
+      
+      // Ctrl+C - Copy
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+        e.preventDefault();
+        if (selectedPaths.size > 0) {
+          // Store first selected for single-file operations
+          const firstPath = Array.from(selectedPaths)[0];
+          const entry = findEntryByPath(fileStructure, firstPath);
+          if (entry) {
+            setClipboard(entry);
+            setCutPaths(new Set()); // Clear cut mode
+          }
+        } else if (contextMenu?.entry) {
+          handleCopy(contextMenu.entry);
+          setCutPaths(new Set());
+        }
+        setContextMenu(null);
+        return;
+      }
+      
+      // Ctrl+V - Paste
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        e.preventDefault();
+        
+        // Handle cut-paste (move)
+        if (cutPaths.size > 0 && currentPath) {
+          // Determine target folder
+          let targetFolder = currentPath;
+          if (selectedPaths.size === 1) {
+            const selectedPath = Array.from(selectedPaths)[0];
+            const selectedEntry = findEntryByPath(fileStructure, selectedPath);
+            if (selectedEntry?.isDirectory) {
+              targetFolder = selectedPath;
+            }
+          }
+          
+          for (const srcPath of cutPaths) {
+            try {
+              const fileName = srcPath.split(/[\\/]/).pop();
+              if (fileName) {
+                const destPath = `${targetFolder}/${fileName}`;
+                if (srcPath !== destPath) {
+                  await window.electronAPI.moveFile(srcPath, destPath);
+                  closeFile(srcPath);
+                }
+              }
+            } catch (err) {
+              console.error('Failed to move:', srcPath, err);
+            }
+          }
+          setCutPaths(new Set());
+          await refreshFileStructure();
+          return;
+        }
+        
+        // Handle copy-paste
+        if (clipboard) {
+          await handlePaste();
+        }
+        return;
+      }
+      
+      // Ctrl+A - Select all
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+        e.preventDefault();
+        const allPaths = flattenEntries(fileStructure, expandedFolders).map(e => e.path);
+        setSelectedPaths(new Set(allPaths));
+        return;
+      }
+      
+      // Ctrl+F - Toggle search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        setShowSearch(prev => !prev);
+        return;
+      }
+      
+      // Escape - Clear selection / close search
+      if (e.key === 'Escape') {
+        if (showSearch) {
+          setShowSearch(false);
+          setSearchQuery('');
+        } else {
+          setSelectedPaths(new Set());
+          setFocusedPath(null);
+        }
+        return;
+      }
+      
+      // Arrow key navigation
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+        const flatList = flattenEntries(sortedFileStructure, expandedFolders);
+        if (flatList.length === 0) return;
+        
+        const currentIndex = focusedPath ? flatList.findIndex(entry => entry.path === focusedPath) : -1;
+        
+        if (e.key === 'ArrowDown') {
+          const nextIndex = currentIndex < flatList.length - 1 ? currentIndex + 1 : 0;
+          const nextEntry = flatList[nextIndex];
+          setFocusedPath(nextEntry.path);
+          if (!e.shiftKey) {
+            setSelectedPaths(new Set([nextEntry.path]));
+            setLastSelectedPath(nextEntry.path);
+          } else {
+            // Extend selection
+            setSelectedPaths(prev => new Set([...prev, nextEntry.path]));
+          }
+        } else if (e.key === 'ArrowUp') {
+          const prevIndex = currentIndex > 0 ? currentIndex - 1 : flatList.length - 1;
+          const prevEntry = flatList[prevIndex];
+          setFocusedPath(prevEntry.path);
+          if (!e.shiftKey) {
+            setSelectedPaths(new Set([prevEntry.path]));
+            setLastSelectedPath(prevEntry.path);
+          } else {
+            setSelectedPaths(prev => new Set([...prev, prevEntry.path]));
+          }
+        } else if (e.key === 'ArrowRight' && focusedPath) {
+          // Expand folder or move to first child
+          const entry = findEntryByPath(fileStructure, focusedPath);
+          if (entry?.isDirectory) {
+            if (!expandedFolders.has(focusedPath)) {
+              handleToggleFolder(focusedPath);
+            } else if (entry.children && entry.children.length > 0) {
+              // Move to first child
+              const firstChild = entry.children[0];
+              setFocusedPath(firstChild.path);
+              setSelectedPaths(new Set([firstChild.path]));
+              setLastSelectedPath(firstChild.path);
+            }
+          }
+        } else if (e.key === 'ArrowLeft' && focusedPath) {
+          // Collapse folder or move to parent
+          const entry = findEntryByPath(fileStructure, focusedPath);
+          if (entry?.isDirectory && expandedFolders.has(focusedPath)) {
+            handleToggleFolder(focusedPath);
+          } else {
+            // Move to parent
+            const parentPath = focusedPath.substring(0, focusedPath.lastIndexOf('/'));
+            if (parentPath && parentPath !== currentPath) {
+              const parentEntry = findEntryByPath(fileStructure, parentPath);
+              if (parentEntry) {
+                setFocusedPath(parentPath);
+                setSelectedPaths(new Set([parentPath]));
+                setLastSelectedPath(parentPath);
+              }
+            }
+          }
+        }
+        return;
+      }
+      
+      // Enter - Open file or toggle folder
+      if (e.key === 'Enter' && focusedPath) {
+        const entry = findEntryByPath(fileStructure, focusedPath);
+        if (entry) {
+          if (entry.isDirectory) {
+            handleToggleFolder(focusedPath);
+          } else {
+            useAppStore.getState().openFile(focusedPath);
+          }
+        }
+        return;
       }
     };
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [contextMenu, clipboard, currentPath]);
+  }, [contextMenu, clipboard, currentPath, selectedPaths, cutPaths, fileStructure, expandedFolders, focusedPath, showSearch, sortedFileStructure, handleToggleFolder, closeFile]);
+
+  // Helper to find entry by path
+  const findEntryByPath = (entries: FileEntry[], path: string): FileEntry | null => {
+    for (const entry of entries) {
+      if (entry.path === path) return entry;
+      if (entry.children) {
+        const found = findEntryByPath(entry.children, path);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
 
   const handleOpenToRight = (entry: FileEntry) => {
     if (!entry.isDirectory) {
@@ -392,7 +813,6 @@ export const FileExplorer: React.FC = () => {
       try {
         const filePath = (file as any).path;
         if (filePath) {
-          await window.electronAPI.approveExternalPaths([filePath]);
           const fileName = filePath.split(/[\\/]/).pop() || file.name;
           let destPath = `${targetFolder}/${fileName}`;
           
@@ -416,24 +836,13 @@ export const FileExplorer: React.FC = () => {
 
   const handleMoveTo = async (entry: FileEntry) => {
     // Open folder picker dialog
-    const targetFolder = await window.electronAPI.openFolderForMove();
+    const targetFolder = await window.electronAPI.openFolder();
     if (targetFolder) {
-      const wasOpen = useAppStore.getState().openFiles.includes(entry.path);
       try {
         const fileName = entry.name;
         const destPath = `${targetFolder}/${fileName}`;
         await window.electronAPI.moveFile(entry.path, destPath);
-        // Update store: transfer file content from old path to new path
-        renameFileContent(entry.path, destPath);
-        // Close old tab and open new one if file was open
-        if (wasOpen) {
-          window.dispatchEvent(new CustomEvent('app-close-file', { detail: { path: entry.path } }));
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              useAppStore.getState().openFile(destPath);
-            });
-          });
-        }
+        closeFile(entry.path);
         await refreshFileStructure();
       } catch (e) {
         console.error("Failed to move", e);
@@ -465,7 +874,6 @@ export const FileExplorer: React.FC = () => {
   };
 
   const handleMoveFile = async (sourcePath: string, targetFolder: string) => {
-    const wasOpen = useAppStore.getState().openFiles.includes(sourcePath);
     try {
       const fileName = sourcePath.split('/').pop();
       if (!fileName) return;
@@ -477,17 +885,6 @@ export const FileExplorer: React.FC = () => {
       if (sourceParent === targetFolder) return;
       
       await window.electronAPI.moveFile(sourcePath, destPath);
-      // Update store: transfer file content from old path to new path
-      renameFileContent(sourcePath, destPath);
-      // Close old tab and open new one if file was open
-      if (wasOpen) {
-        window.dispatchEvent(new CustomEvent('app-close-file', { detail: { path: sourcePath } }));
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            useAppStore.getState().openFile(destPath);
-          });
-        });
-      }
       await refreshFileStructure();
     } catch (e) {
       console.error("Failed to move file", e);
@@ -535,31 +932,6 @@ export const FileExplorer: React.FC = () => {
     }
   };
 
-  const handleImportImage = async () => {
-    if (!currentPath) return;
-    try {
-      const selected = await window.electronAPI.openFile({
-        filters: [{
-          name: 'Images',
-          extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']
-        }]
-      });
-
-      if (selected && typeof selected === 'string') {
-        const fileName = selected.split(/[\\/]/).pop();
-        if (fileName) {
-          const destPath = `${currentPath}/${fileName}`;
-          await window.electronAPI.copyFile(selected, destPath);
-          const files = await loadFileStructure(currentPath);
-          setFileStructure(files);
-        }
-      }
-    } catch (e) {
-      console.error("Failed to import image", e);
-      alert("Failed to import image");
-    }
-  };
-
   const [isRootDragOver, setIsRootDragOver] = useState(false);
 
   const handleRootDragOver = (e: React.DragEvent) => {
@@ -591,7 +963,6 @@ export const FileExplorer: React.FC = () => {
           // Get the file path - in Electron, dropped files have a path property
           const filePath = (file as any).path as string;
           if (filePath) {
-            await window.electronAPI.approveExternalPaths([filePath]);
             const fileName = filePath.split(/[\\/]/).pop() || file.name;
             let destPath = `${currentPath}/${fileName}`;
             
@@ -624,13 +995,52 @@ export const FileExplorer: React.FC = () => {
   return (
     <div 
       ref={explorerRef}
-      className="w-full h-full bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col overflow-visible text-gray-900 dark:text-gray-100"
+      className="w-full h-full bg-gray-50 dark:bg-gray-950 border-r border-gray-200 dark:border-gray-800 flex flex-col"
       tabIndex={0}
       onContextMenu={handleExplorerContextMenu}
+      onClick={handleExplorerClick}
     >
-      <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center flex-shrink-0 text-gray-900 dark:text-gray-100 overflow-visible">
-        <span className="font-semibold text-sm uppercase text-gray-700 dark:text-gray-100 truncate">Explorer</span>
-        <div className="flex space-x-1 flex-shrink-0">
+      <div className="p-2 border-b border-gray-200 dark:border-gray-800 flex items-center gap-2 overflow-hidden">
+        <span className="font-semibold text-sm uppercase text-gray-500 whitespace-nowrap overflow-hidden transition-all duration-200 ease-out min-w-0" style={{ flexShrink: 1 }}>Explorer</span>
+        <div className="flex space-x-1 flex-shrink-0 ml-auto">
+          {/* Search Toggle */}
+          <button
+            className={clsx(
+              "p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded",
+              showSearch && "bg-gray-200 dark:bg-gray-800"
+            )}
+            title="Search (Ctrl+F)"
+            onClick={() => setShowSearch(!showSearch)}
+          >
+            <Search size={16} />
+          </button>
+          {/* Sort Options */}
+          <div className="relative group">
+            <button
+              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded"
+              title="Sort"
+            >
+              <ArrowUpDown size={16} />
+            </button>
+            <div className="absolute right-0 top-full mt-1 bg-[#2d2d2d] border border-[#404040] rounded-lg shadow-lg z-50 min-w-[150px] py-1 text-[#dcddde] hidden group-hover:block">
+              {[
+                { value: 'name-asc', label: 'Name (A-Z)' },
+                { value: 'name-desc', label: 'Name (Z-A)' },
+                { value: 'type', label: 'Type' },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  className={clsx(
+                    "w-full px-3 py-1.5 text-left text-sm hover:bg-[#094771] transition-colors",
+                    sortOption === opt.value && "bg-[#094771]"
+                  )}
+                  onClick={() => setSortOption(opt.value as SortOption)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
           {/* Quick Create Dropdown */}
           <div className="relative" ref={quickCreateRef}>
             <button 
@@ -645,17 +1055,17 @@ export const FileExplorer: React.FC = () => {
               {isQuickCreateOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
             </button>
             {isQuickCreateOpen && (
-              <div className="absolute left-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl z-[200] min-w-[240px] max-h-[70vh] overflow-auto py-1 text-gray-900 dark:text-gray-50">
+              <div className="absolute left-0 top-full mt-1 bg-[#2d2d2d] border border-[#404040] rounded-lg shadow-lg z-50 min-w-[180px] py-1 text-[#dcddde]">
                 {FILE_TYPES.map((fileType) => {
                   const Icon = fileType.icon;
                   return (
                     <button
                       key={fileType.extension}
-                      className="w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 transition-colors hover:bg-gray-100 dark:hover:bg-gray-700"
+                      className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#094771] flex items-center gap-2 transition-colors"
                       onClick={() => handleQuickCreate(fileType)}
                     >
-                      <Icon size={14} className="text-gray-900 dark:text-gray-100" />
-                      <span className="text-gray-900 dark:text-gray-50">{fileType.label}</span>
+                      <Icon size={14} className="text-[#888]" />
+                      <span>{fileType.label}</span>
                     </button>
                   );
                 })}
@@ -663,40 +1073,98 @@ export const FileExplorer: React.FC = () => {
             )}
           </div>
           <button 
-            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded transition-colors" 
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded" 
             title="New File"
             onClick={() => handleQuickCreate(FILE_TYPES[0])}
           >
             <FilePlus size={16} />
           </button>
           <button 
-            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded transition-colors" 
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded" 
             title="New Folder"
             onClick={handleCreateFolder}
           >
             <FolderPlus size={16} />
           </button>
-          <button 
-            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded transition-colors" 
-            title="Import Image"
-            onClick={handleImportImage}
-          >
-            <ImagePlus size={16} />
-          </button>
         </div>
       </div>
+      
+      {/* Search Bar */}
+      {showSearch && (
+        <div className="p-2 border-b border-gray-200 dark:border-gray-800 flex items-center gap-2">
+          <Search size={14} className="text-gray-500" />
+          <input
+            type="text"
+            className="flex-1 bg-transparent text-sm outline-none placeholder-gray-500"
+            placeholder="Filter files..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            autoFocus
+          />
+          {searchQuery && (
+            <button
+              className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-800 rounded"
+              onClick={() => setSearchQuery('')}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
+      
+      {/* Selection info bar */}
+      {selectedPaths.size > 1 && (
+        <div className="px-2 py-1 bg-[#094771] text-sm text-white flex items-center justify-between">
+          <span>{selectedPaths.size} items selected</span>
+          <button
+            className="hover:underline text-xs"
+            onClick={() => setSelectedPaths(new Set())}
+          >
+            Clear
+          </button>
+        </div>
+      )}
+      
+      {/* Cut mode indicator */}
+      {cutPaths.size > 0 && (
+        <div className="px-2 py-1 bg-orange-600 text-sm text-white flex items-center justify-between">
+          <span><Scissors size={12} className="inline mr-1" />{cutPaths.size} item(s) cut</span>
+          <button
+            className="hover:underline text-xs"
+            onClick={() => setCutPaths(new Set())}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+      
       <div 
         className={clsx(
-          "flex-grow overflow-y-auto overflow-x-hidden min-w-0",
-          isRootDragOver && "bg-gray-200 dark:bg-gray-800/50"
+          "flex-grow overflow-y-auto",
+          isRootDragOver && "bg-blue-100 dark:bg-blue-900/30"
         )}
         onDragOver={handleRootDragOver}
         onDragLeave={handleRootDragLeave}
         onDrop={handleRootDrop}
       >
         {currentPath ? (
-          fileStructure.map((entry) => (
-            <FileNode key={entry.path} entry={entry} onMoveFile={handleMoveFile} onContextMenu={handleFileContextMenu} onExternalFileDrop={handleExternalFileDrop} />
+          sortedFileStructure.map((entry) => (
+            <FileNode 
+              key={entry.path} 
+              entry={entry} 
+              onMoveFile={handleMoveFile} 
+              onContextMenu={handleFileContextMenu} 
+              onExternalFileDrop={handleExternalFileDrop}
+              selectedPaths={selectedPaths}
+              onSelect={handleSelect}
+              lastSelectedPath={lastSelectedPath}
+              allEntries={sortedFileStructure}
+              focusedPath={focusedPath}
+              onSetFocused={setFocusedPath}
+              expandedFolders={expandedFolders}
+              onToggleFolder={handleToggleFolder}
+              searchQuery={searchQuery}
+            />
           ))
         ) : (
           <div className="p-4 text-center text-gray-500 text-sm">
@@ -708,66 +1176,76 @@ export const FileExplorer: React.FC = () => {
       {/* Context Menu - rendered with high z-index to appear above FlexLayout splitters */}
       {contextMenu && (
         <div
-          className="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1 min-w-[200px] text-gray-900 dark:text-gray-50"
+          className="fixed z-[9999] bg-[#2d2d2d] border border-[#404040] rounded-lg shadow-xl py-1 min-w-[200px] text-[#dcddde]"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
         >
           <button
-            className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#094771] flex items-center gap-2 transition-colors"
             onClick={async () => {
               await refreshFileStructure();
               setContextMenu(null);
             }}
           >
-            <PanelRight size={14} className="text-gray-500" />
+            <PanelRight size={14} className="text-[#888]" />
             <span>Refresh</span>
           </button>
-          <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+          <button
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#094771] flex items-center gap-2 transition-colors"
+            onClick={() => {
+              setExpandedFolders(new Set());
+              setContextMenu(null);
+            }}
+          >
+            <ChevronsUpDown size={14} className="text-[#888]" />
+            <span>Collapse All</span>
+          </button>
+          <div className="border-t border-[#404040] my-1" />
 
           {contextMenu.entry && !contextMenu.entry.isDirectory && (
             <button
-              className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
+              className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#094771] flex items-center gap-2 transition-colors"
               onClick={() => {
                 handleOpenToRight(contextMenu.entry!);
                 setContextMenu(null);
               }}
             >
-              <PanelRight size={14} className="text-gray-500" />
+              <PanelRight size={14} className="text-[#888]" />
               <span>Open to the right</span>
             </button>
           )}
 
           {contextMenu.entry && !contextMenu.entry.isDirectory && (
             <button
-              className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
+              className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#094771] flex items-center gap-2 transition-colors"
               onClick={() => {
                 window.dispatchEvent(new CustomEvent('app-open-version-history', { detail: { path: contextMenu.entry!.path } }));
                 setContextMenu(null);
               }}
             >
-              <History size={14} className="text-gray-500" />
+              <History size={14} className="text-[#888]" />
               <span>Version history</span>
             </button>
           )}
 
-          <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+          <div className="border-t border-[#404040] my-1" />
 
           <button
-            className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#094771] flex items-center gap-2 transition-colors"
             onClick={() => {
               if (contextMenu.entry) handleCopy(contextMenu.entry);
               setContextMenu(null);
             }}
           >
-            <Copy size={14} className="text-gray-500" />
+            <Copy size={14} className="text-[#888]" />
             <span>Copy</span>
-            <span className="ml-auto text-xs text-gray-600 dark:text-gray-300">⌘C</span>
+            <span className="ml-auto text-xs text-[#666]">⌘C</span>
           </button>
           <button
             className={clsx(
               "w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 transition-colors",
-              clipboard ? "hover:bg-gray-100 dark:hover:bg-gray-800" : "opacity-50 cursor-not-allowed"
+              clipboard ? "hover:bg-[#094771]" : "opacity-50 cursor-not-allowed"
             )}
             onClick={() => {
               if (clipboard) {
@@ -777,57 +1255,57 @@ export const FileExplorer: React.FC = () => {
             }}
             disabled={!clipboard}
           >
-            <Clipboard size={14} className="text-gray-500" />
+            <Clipboard size={14} className="text-[#888]" />
             <span>Paste</span>
-            <span className="ml-auto text-xs text-gray-600 dark:text-gray-300">⌘V</span>
+            <span className="ml-auto text-xs text-[#666]">⌘V</span>
           </button>
 
           {contextMenu.entry && !contextMenu.entry.isDirectory && (
             <button
-              className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
+              className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#094771] flex items-center gap-2 transition-colors"
               onClick={() => {
                 handleDuplicate(contextMenu.entry!);
                 setContextMenu(null);
               }}
             >
-              <Copy size={14} className="text-gray-500" />
+              <Copy size={14} className="text-[#888]" />
               <span>Make a copy</span>
             </button>
           )}
           <button
-            className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#094771] flex items-center gap-2 transition-colors"
             onClick={() => {
               if (contextMenu.entry) handleMoveTo(contextMenu.entry);
               setContextMenu(null);
             }}
           >
-            <FolderInput size={14} className="text-gray-500" />
+            <FolderInput size={14} className="text-[#888]" />
             <span>Move to...</span>
           </button>
 
-          <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+          <div className="border-t border-[#404040] my-1" />
 
           <button
-            className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#094771] flex items-center gap-2 transition-colors"
             onClick={() => {
               if (contextMenu.entry) handleShowInExplorer(contextMenu.entry);
               setContextMenu(null);
             }}
           >
-            <ExternalLink size={14} className="text-gray-500" />
+            <ExternalLink size={14} className="text-[#888]" />
             <span>Show in Finder</span>
           </button>
 
-          <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+          <div className="border-t border-[#404040] my-1" />
 
           <button
-            className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#094771] flex items-center gap-2 transition-colors"
             onClick={() => {
               if (contextMenu.entry) setRenameModal({ isOpen: true, entry: contextMenu.entry, newName: contextMenu.entry.name });
               setContextMenu(null);
             }}
           >
-            <Edit2 size={14} className="text-gray-500" />
+            <Edit2 size={14} className="text-[#888]" />
             <span>Rename</span>
           </button>
           <button

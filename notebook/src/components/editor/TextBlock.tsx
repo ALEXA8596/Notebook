@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { useAppStore, FileEntry } from '../../store/store';
 import { readFileContent, saveImage } from '../../lib/fileSystem';
 import { Eye, Edit3, Columns, AlertTriangle, Sparkles } from 'lucide-react';
+import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
 
 // CodeMirror 6 imports
 import { EditorView, keymap, placeholder as cmPlaceholder, drawSelection, dropCursor, highlightActiveLine, highlightSpecialChars, rectangularSelection, crosshairCursor, lineNumbers, highlightActiveLineGutter } from '@codemirror/view';
@@ -163,10 +164,6 @@ const obsidianTheme = EditorView.theme({
     color: '#888',
     borderRadius: '4px',
     padding: '0 6px',
-  },
-  // Hide gutters (line numbers, fold markers, etc.) to match Obsidian clean look
-  '.cm-gutters': {
-    display: 'none !important',
   },
   '.cm-foldGutter': {
     display: 'none !important',
@@ -330,6 +327,16 @@ export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onConte
     const name = path.split('/').pop() || 'Untitled';
     return name.replace(/\.md$/i, '');
   }, [filePath, activeFile]);
+
+  // Get the directory of the current file for resolving relative paths
+  const fileDirectory = useMemo(() => {
+    const path = filePath || activeFile;
+    if (!path) return currentPath || undefined;
+    // Remove the filename to get the directory
+    const lastSep = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+    if (lastSep === -1) return currentPath || undefined;
+    return path.substring(0, lastSep);
+  }, [filePath, activeFile, currentPath]);
   
   // Debounce for preview rendering to improve performance
   const debouncedValue = useDebounce(value, DEBOUNCE_DELAY);
@@ -456,6 +463,7 @@ export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onConte
       
       // Theme
       obsidianTheme,
+      syntaxHighlighting(oneDarkHighlightStyle),
       syntaxHighlighting(obsidianHighlightStyle),
       
       // Keybindings
@@ -471,7 +479,7 @@ export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onConte
       smartListExtension,
       
       // Live preview (controlled by compartment)
-      livePreviewCompartment.of(viewMode === 'live' ? livePreviewExtension(currentPath || undefined) : []),
+      livePreviewCompartment.of(viewMode === 'live' ? livePreviewExtension(fileDirectory) : []),
       
       // Placeholder
       cmPlaceholder(`Start writing your note...
@@ -501,7 +509,7 @@ Add tasks with - [ ] syntax.`),
       view.destroy();
       editorViewRef.current = null;
     };
-  }, [viewMode, livePreviewCompartment, smartListExtension, wikiLinkCompletion, currentPath]);
+  }, [viewMode, livePreviewCompartment, smartListExtension, wikiLinkCompletion, fileDirectory]);
 
   // Toggle live preview when mode changes
   useEffect(() => {
@@ -509,10 +517,10 @@ Add tasks with - [ ] syntax.`),
     
     editorViewRef.current.dispatch({
       effects: livePreviewCompartment.reconfigure(
-        viewMode === 'live' ? livePreviewExtension(currentPath || undefined) : []
+        viewMode === 'live' ? livePreviewExtension(fileDirectory) : []
       ),
     });
-  }, [viewMode, livePreviewCompartment, currentPath]);
+  }, [viewMode, livePreviewCompartment, fileDirectory]);
 
   // Handle paste for images in CodeMirror
   useEffect(() => {

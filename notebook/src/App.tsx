@@ -11,6 +11,7 @@ import { SpreadsheetEmbed } from './components/embeds/SpreadsheetEmbed';
 import { PDFEmbed } from './components/embeds/PDFEmbed';
 import { CSVEmbed } from './components/embeds/CSVEmbed';
 import { HTMLEmbed } from './components/embeds/HTMLEmbed';
+import { ImageEmbed } from './components/embeds/ImageEmbed';
 import { GraphView } from './components/GraphView';
 import { SearchModal } from './components/SearchModal';
 import { QuickSwitcher } from './components/QuickSwitcher';
@@ -174,6 +175,9 @@ const FileTabContent = ({ path }: { path: string }) => {
   }
   if (path.toLowerCase().endsWith('.html') || path.toLowerCase().endsWith('.htm')) {
     return <HTMLEmbed dataString={content} onChange={handleEditorChange} />;
+  }
+  if (path.match(/\.(png|jpg|jpeg|gif|webp|svg|bmp|ico|tiff|tif)$/i)) {
+    return <ImageEmbed dataString={content} filePath={path} />;
   }
   if (path.match(/\.(js|ts|tsx|py|json|css|xml|yaml|yml)$/)) {
     return <MonacoEmbed code={content} language={path.split('.').pop()} onChange={handleEditorChange} />;
