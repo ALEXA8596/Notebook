@@ -1,7 +1,7 @@
 import React, { useState, DragEvent, useRef, useEffect, useCallback, useMemo } from 'react';
 import { ChevronRight, ChevronDown, File, FilePlus, FolderPlus, ImagePlus, Folder, Pencil, GitBranch, Code, Kanban, Table, FileText, Plus, ChevronUp, Trash2, Edit2, Copy, FolderInput, ExternalLink, PanelRight, FileSpreadsheet, Globe, History, Clipboard, Scissors, Search, X, ArrowUpDown, ChevronsUpDown, FolderOpen, FolderClosed } from 'lucide-react';
 import { FileEntry, useAppStore } from '../store/store';
-import { createFile, createFolder, loadFileStructure } from '../lib/fileSystem';
+import { createFile, createFolder, loadFileStructure, readFileContent, saveFileContent } from '../lib/fileSystem';
 import clsx from 'clsx';
 
 // File type definitions for quick create
@@ -285,6 +285,14 @@ const getMimeType = (fileName: string): string => {
   return mimeTypes[ext || ''] || 'application/octet-stream';
 };
 
+// Image file extensions for link update detection
+const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico', 'tiff', 'tif']);
+
+const isImageFile = (path: string): boolean => {
+  const ext = path.split('.').pop()?.toLowerCase() || '';
+  return IMAGE_EXTENSIONS.has(ext);
+};
+
 export const FileExplorer: React.FC = () => {
   const { fileStructure, currentPath, setFileStructure, closeFile } = useAppStore();
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
@@ -319,6 +327,17 @@ export const FileExplorer: React.FC = () => {
     entry: null,
     newName: ''
   });
+  
+  // Update links modal state (for when images are moved)
+  const [updateLinksModal, setUpdateLinksModal] = useState<{
+    isOpen: boolean;
+    movedImages: Array<{ oldPath: string; newPath: string }>;
+    isProcessing: boolean;
+  } | null>(null);
+  
+  // Ref to batch multiple image moves before showing modal
+  const pendingImageMovesRef = useRef<Array<{ oldPath: string; newPath: string }>>([]);
+  const imageMoveBatchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Toggle folder expansion
   const handleToggleFolder = useCallback((path: string) => {
@@ -885,10 +904,133 @@ export const FileExplorer: React.FC = () => {
       if (sourceParent === targetFolder) return;
       
       await window.electronAPI.moveFile(sourcePath, destPath);
+      
+      // If it's an image file, queue it for link update prompt
+      if (isImageFile(sourcePath)) {
+        pendingImageMovesRef.current.push({ oldPath: sourcePath, newPath: destPath });
+        
+        // Clear existing timeout and set a new one to batch multiple moves
+        if (imageMoveBatchTimeoutRef.current) {
+          clearTimeout(imageMoveBatchTimeoutRef.current);
+        }
+        imageMoveBatchTimeoutRef.current = setTimeout(() => {
+          if (pendingImageMovesRef.current.length > 0) {
+            setUpdateLinksModal({
+              isOpen: true,
+              movedImages: [...pendingImageMovesRef.current],
+              isProcessing: false
+            });
+            pendingImageMovesRef.current = [];
+          }
+        }, 100); // Small delay to batch multiple moves
+      }
+      
       await refreshFileStructure();
     } catch (e) {
       console.error("Failed to move file", e);
       alert("Failed to move file: " + (e as Error).message);
+    }
+  };
+
+  // Update image links in all markdown files
+  const handleUpdateImageLinks = async (movedImages: Array<{ oldPath: string; newPath: string }>) => {
+    if (!currentPath || movedImages.length === 0) return;
+    
+    setUpdateLinksModal(prev => prev ? { ...prev, isProcessing: true } : null);
+    
+    try {
+      // Helper to collect all markdown files
+      const collectMarkdownFiles = (entries: FileEntry[]): string[] => {
+        const mdFiles: string[] = [];
+        for (const entry of entries) {
+          if (entry.isDirectory && entry.children) {
+            mdFiles.push(...collectMarkdownFiles(entry.children));
+          } else if (entry.name.toLowerCase().endsWith('.md')) {
+            mdFiles.push(entry.path);
+          }
+        }
+        return mdFiles;
+      };
+      
+      const markdownFiles = collectMarkdownFiles(fileStructure);
+      const normalizePathForSearch = (p: string) => p.replace(/\\/g, '/');
+      const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      
+      let updatedCount = 0;
+      
+      for (const mdFile of markdownFiles) {
+        try {
+          let content = await readFileContent(mdFile);
+          let newContent = content;
+          
+          // Process each moved image
+          for (const { oldPath, newPath } of movedImages) {
+            const oldNormalized = normalizePathForSearch(oldPath);
+            const newNormalized = normalizePathForSearch(newPath);
+            
+            const oldFileName = oldPath.split('/').pop() || '';
+            const newFileName = newPath.split('/').pop() || '';
+            
+            const oldRelative = oldNormalized.startsWith(normalizePathForSearch(currentPath)) 
+              ? oldNormalized.substring(normalizePathForSearch(currentPath).length + 1)
+              : oldNormalized;
+            const newRelative = newNormalized.startsWith(normalizePathForSearch(currentPath))
+              ? newNormalized.substring(normalizePathForSearch(currentPath).length + 1)
+              : newNormalized;
+            
+            // Pattern 1: Standard markdown image syntax ![alt](path)
+            const mdImagePattern = new RegExp(
+              `(!\\[[^\\]]*\\]\\()` +
+              `(${escapeRegex(oldNormalized)}|${escapeRegex(oldRelative)}|${escapeRegex(oldFileName)})` +
+              `(\\))`,
+              'g'
+            );
+            newContent = newContent.replace(mdImagePattern, (match, prefix, path, suffix) => {
+              if (path === oldNormalized) return `${prefix}${newNormalized}${suffix}`;
+              if (path === oldRelative) return `${prefix}${newRelative}${suffix}`;
+              if (path === oldFileName) return `${prefix}${newFileName}${suffix}`;
+              return match;
+            });
+            
+            // Pattern 2: Wiki-style embed ![[filename]] or ![[path/to/filename]]
+            const wikiPattern = new RegExp(
+              `(!\\[\\[)` +
+              `(${escapeRegex(oldRelative)}|${escapeRegex(oldFileName)})` +
+              `(\\]\\])`,
+              'g'
+            );
+            newContent = newContent.replace(wikiPattern, (match, prefix, path, suffix) => {
+              if (path === oldRelative) return `${prefix}${newRelative}${suffix}`;
+              if (path === oldFileName) return `${prefix}${newFileName}${suffix}`;
+              return match;
+            });
+          }
+          
+          // If content changed, save the file
+          if (newContent !== content) {
+            await saveFileContent(mdFile, newContent);
+            updatedCount++;
+            
+            // Also update the in-memory content if file is open
+            const { fileContents, setFileContent } = useAppStore.getState();
+            if (fileContents[mdFile]) {
+              setFileContent(mdFile, newContent);
+            }
+          }
+        } catch (e) {
+          console.warn(`Failed to update links in ${mdFile}:`, e);
+        }
+      }
+      
+      setUpdateLinksModal(null);
+      
+      if (updatedCount > 0) {
+        // Trigger refresh of any open editors
+        window.dispatchEvent(new CustomEvent('app-refresh-files'));
+      }
+    } catch (e) {
+      console.error("Failed to update image links:", e);
+      setUpdateLinksModal(null);
     }
   };
 
@@ -1366,6 +1508,65 @@ export const FileExplorer: React.FC = () => {
                 onClick={handleRename}
               >
                 Rename
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Update Links Modal (for moved images) */}
+      {updateLinksModal?.isOpen && updateLinksModal.movedImages.length > 0 && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !updateLinksModal.isProcessing) {
+              setUpdateLinksModal(null);
+            }
+          }}
+        >
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl p-5 w-[450px] max-h-[80vh] flex flex-col">
+            <h3 className="text-lg font-semibold mb-2">Update Image Links?</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              {updateLinksModal.movedImages.length === 1 ? (
+                <>
+                  The image <span className="font-medium text-gray-800 dark:text-gray-200">{updateLinksModal.movedImages[0].oldPath.split('/').pop()}</span> has been moved.
+                </>
+              ) : (
+                <>
+                  <span className="font-medium text-gray-800 dark:text-gray-200">{updateLinksModal.movedImages.length} images</span> have been moved.
+                </>
+              )}
+              {' '}Would you like to update all references in your markdown files?
+            </p>
+            <div className="text-xs text-gray-500 dark:text-gray-500 mb-4 p-2 bg-gray-100 dark:bg-gray-800 rounded max-h-48 overflow-y-auto flex-shrink-0">
+              {updateLinksModal.movedImages.map((img, idx) => (
+                <div key={idx} className={idx > 0 ? 'mt-2 pt-2 border-t border-gray-200 dark:border-gray-700' : ''}>
+                  <div className="truncate"><span className="font-medium">From:</span> {img.oldPath}</div>
+                  <div className="truncate"><span className="font-medium">To:</span> {img.newPath}</div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                className="px-3 py-1.5 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
+                onClick={() => setUpdateLinksModal(null)}
+                disabled={updateLinksModal.isProcessing}
+              >
+                No, Keep Old Links
+              </button>
+              <button
+                className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 flex items-center gap-2"
+                onClick={() => handleUpdateImageLinks(updateLinksModal.movedImages)}
+                disabled={updateLinksModal.isProcessing}
+              >
+                {updateLinksModal.isProcessing ? (
+                  <>
+                    <span className="animate-spin">⟳</span>
+                    Updating...
+                  </>
+                ) : (
+                  'Yes, Update Links'
+                )}
               </button>
             </div>
           </div>
