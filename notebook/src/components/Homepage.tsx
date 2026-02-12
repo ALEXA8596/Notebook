@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '../store/store';
 import { useTaskStore } from '../store/taskStore';
+import { getModifierKey } from '../lib/platform';
 import clsx from 'clsx';
 
 interface Widget {
@@ -521,11 +522,11 @@ export const Homepage: React.FC<HomepageProps> = ({
         {/* Keyboard Shortcuts Hint */}
         <div className="mt-8 text-center">
           <p className="text-xs text-gray-400">
-            Press <kbd className="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">⌘K</kbd> for commands
+            Press <kbd className="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">{getModifierKey()}K</kbd> for commands
             {' • '}
-            <kbd className="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">⌘O</kbd> quick switcher
+            <kbd className="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">{getModifierKey()}O</kbd> quick switcher
             {' • '}
-            <kbd className="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">⌘S</kbd> save
+            <kbd className="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">{getModifierKey()}S</kbd> save
           </p>
         </div>
       </div>

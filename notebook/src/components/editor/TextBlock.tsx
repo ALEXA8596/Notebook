@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useAppStore, FileEntry } from '../../store/store';
 import { readFileContent, saveImage } from '../../lib/fileSystem';
+import { getModifierKey } from '../../lib/platform';
 import { Eye, Edit3, Columns, AlertTriangle, Sparkles } from 'lucide-react';
 import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
 
@@ -1007,8 +1008,8 @@ Add tasks with - [ ] syntax.`),
       {/* Text formatting */}
       <div className="flex items-center gap-0.5">
         {[
-          { label: 'B', action: 'bold', title: 'Bold (⌘B)', className: 'font-bold' },
-          { label: 'I', action: 'italic', title: 'Italic (⌘I)', className: 'italic' },
+          { label: 'B', action: 'bold', title: `Bold (${getModifierKey()}B)`, className: 'font-bold' },
+          { label: 'I', action: 'italic', title: `Italic (${getModifierKey()}I)`, className: 'italic' },
           { label: 'S', action: 'strikethrough', title: 'Strikethrough', className: 'line-through' },
           { label: '<>', action: 'inline-code', title: 'Code' },
         ].map(btn => (

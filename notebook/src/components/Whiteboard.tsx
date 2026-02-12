@@ -4,6 +4,7 @@ import {
   Trash2, Download, Save, ZoomIn, ZoomOut, Move, Palette,
   MousePointer, Grid3X3, Layers
 } from 'lucide-react';
+import { getModifierKey } from '../lib/platform';
 import clsx from 'clsx';
 
 interface WhiteboardProps {
@@ -605,7 +606,7 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ dataString, onChange, re
           onClick={handleUndo}
           disabled={historyIndex === 0}
           className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30"
-          title="Undo (⌘Z)"
+          title={`Undo (${getModifierKey()}Z)`}
         >
           <Undo size={18} />
         </button>
@@ -613,7 +614,7 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ dataString, onChange, re
           onClick={handleRedo}
           disabled={historyIndex === history.length - 1}
           className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30"
-          title="Redo (⌘⇧Z)"
+          title={`Redo (${getModifierKey()}⇧Z)`}
         >
           <Redo size={18} />
         </button>

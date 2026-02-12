@@ -2,6 +2,7 @@ import React, { useState, DragEvent, useRef, useEffect, useCallback, useMemo } f
 import { ChevronRight, ChevronDown, File, FilePlus, FolderPlus, ImagePlus, Folder, Pencil, GitBranch, Code, Kanban, Table, FileText, Plus, ChevronUp, Trash2, Edit2, Copy, FolderInput, ExternalLink, PanelRight, FileSpreadsheet, Globe, History, Clipboard, Scissors, Search, X, ArrowUpDown, ChevronsUpDown, FolderOpen, FolderClosed } from 'lucide-react';
 import { FileEntry, useAppStore } from '../store/store';
 import { createFile, createFolder, loadFileStructure, readFileContent, saveFileContent } from '../lib/fileSystem';
+import { getModifierKey } from '../lib/platform';
 import clsx from 'clsx';
 
 // File type definitions for quick create
@@ -1151,7 +1152,7 @@ export const FileExplorer: React.FC = () => {
               "p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded",
               showSearch && "bg-gray-200 dark:bg-gray-800"
             )}
-            title="Search (Ctrl+F)"
+            title={`Search (${getModifierKey()}F)`}
             onClick={() => setShowSearch(!showSearch)}
           >
             <Search size={16} />
@@ -1382,7 +1383,7 @@ export const FileExplorer: React.FC = () => {
           >
             <Copy size={14} className="text-[#888]" />
             <span>Copy</span>
-            <span className="ml-auto text-xs text-[#666]">⌘C</span>
+            <span className="ml-auto text-xs text-[#666]">{getModifierKey()}C</span>
           </button>
           <button
             className={clsx(
@@ -1399,7 +1400,7 @@ export const FileExplorer: React.FC = () => {
           >
             <Clipboard size={14} className="text-[#888]" />
             <span>Paste</span>
-            <span className="ml-auto text-xs text-[#666]">⌘V</span>
+            <span className="ml-auto text-xs text-[#666]">{getModifierKey()}V</span>
           </button>
 
           {contextMenu.entry && !contextMenu.entry.isDirectory && (

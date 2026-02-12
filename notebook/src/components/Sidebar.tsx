@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Settings, Search, Save, FolderOpen, Network, Home, 
   Calendar, Bot, CheckSquare, CalendarDays, BarChart3, Command,
@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '../store/store';
 import { openVault, createFile } from '../lib/fileSystem';
+import { getModifierKey } from '../lib/platform';
 import clsx from 'clsx';
 
 // Sidebar item definitions
@@ -24,6 +25,8 @@ export const Sidebar: React.FC = () => {
     setCurrentPath, activeFile, unsavedChanges, currentPath, openFile,
     sidebarConfig
   } = useAppStore();
+
+  const [hoveredItem, setHoveredItem] = useState<{ item: SidebarItem; top: number } | null>(null);
 
   // Action handlers
   const handleOpenVaultManager = () => {
@@ -70,13 +73,15 @@ export const Sidebar: React.FC = () => {
     openFile(filePath);
   };
 
+  const MOD = getModifierKey();
+
   // All sidebar items definition
   const allItems: SidebarItem[] = [
     // Navigation
     { id: 'home', icon: Layout, label: 'Home Dashboard', description: 'View your personalized dashboard with recent files, quick access, and productivity overview', category: 'navigation', action: () => window.dispatchEvent(new CustomEvent('app-open-homepage')) },
     { id: 'vault', icon: Home, label: 'Vault Manager', description: 'Switch between vaults, create new vaults, or open existing folders as vaults', category: 'navigation', action: handleOpenVaultManager },
     { id: 'graph', icon: Network, label: 'Graph View', description: 'Visualize connections and links between your notes as an interactive network graph', category: 'navigation', action: handleOpenGraph },
-    { id: 'search', icon: Search, label: 'Search', description: 'Search through all notes and files in your vault with full-text search', shortcut: '⌘/', category: 'navigation', action: handleSearch },
+    { id: 'search', icon: Search, label: 'Search', description: 'Search through all notes and files in your vault with full-text search', shortcut: `${MOD}/`, category: 'navigation', action: handleSearch },
     { id: 'daily', icon: Calendar, label: 'Daily Note', description: 'Open or create today\'s daily note for journaling and daily tracking', category: 'navigation', action: handleDailyNote },
     
     // Productivity
@@ -93,11 +98,11 @@ export const Sidebar: React.FC = () => {
     { id: 'quicknote', icon: StickyNote, label: 'Quick Note', description: 'Capture quick thoughts and ideas with floating sticky notes saved to your vault', category: 'tools', action: () => window.dispatchEvent(new CustomEvent('app-open-quicknote')) },
     { id: 'stickies', icon: Grid2x2, label: 'All Stickies', description: 'View and manage all your quick notes and stickies in a grid overview', category: 'tools', action: () => window.dispatchEvent(new CustomEvent('app-open-stickies')) },
     { id: 'copilot', icon: Bot, label: 'AI Copilot', description: 'Get AI-powered writing assistance, summaries, and answers about your notes', category: 'tools', action: () => window.dispatchEvent(new CustomEvent('app-open-copilot')) },
-    { id: 'command', icon: Command, label: 'Command Palette', description: 'Quick access to all commands and actions with fuzzy search', shortcut: '⌘K', category: 'tools', action: () => window.dispatchEvent(new CustomEvent('app-open-command-palette')) },
+    { id: 'command', icon: Command, label: 'Command Palette', description: 'Quick access to all commands and actions with fuzzy search', shortcut: `${MOD}K`, category: 'tools', action: () => window.dispatchEvent(new CustomEvent('app-open-command-palette')) },
     { id: 'cloud', icon: Cloud, label: 'Cloud Sync', description: 'Sync your vault to cloud storage services like Dropbox, Google Drive, or iCloud', category: 'tools', action: () => window.dispatchEvent(new CustomEvent('app-open-cloudsync')) },
     
     // System
-    { id: 'save', icon: Save, label: 'Save', description: 'Save all unsaved changes to disk immediately', shortcut: '⌘S', category: 'system', action: handleSave },
+    { id: 'save', icon: Save, label: 'Save', description: 'Save all unsaved changes to disk immediately', shortcut: `${MOD}S`, category: 'system', action: handleSave },
     { id: 'folder', icon: FolderOpen, label: 'Open Vault', description: 'Open a folder from your filesystem as a vault', category: 'system', action: handleOpenFolder },
     { id: 'about', icon: Info, label: 'About', description: 'View app version, credits, and license information', category: 'system', action: () => window.dispatchEvent(new CustomEvent('app-open-about')) },
     { id: 'settings', icon: Settings, label: 'Settings', description: 'Customize appearance, editor behavior, plugins, and other preferences', category: 'system', action: () => window.dispatchEvent(new CustomEvent('app-open-settings')) },
@@ -140,21 +145,17 @@ export const Sidebar: React.FC = () => {
                     "hover:bg-gray-200 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white",
                     "active:scale-95"
                   )}
-                  title={`${item.label}${item.shortcut ? ` (${item.shortcut})` : ''}`}
                   onClick={item.action}
+                  onMouseEnter={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setHoveredItem({ item, top: rect.top });
+                  }}
+                  onMouseLeave={() => setHoveredItem(null)}
                 >
                   <item.icon size={20} className="text-inherit" />
                   {item.id === 'save' && activeFile && unsavedChanges.has(activeFile) && (
                     <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-yellow-500 rounded-full" />
                   )}
-                  {/* Enhanced Tooltip with description */}
-                  <div className="absolute left-full ml-2 px-3 py-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-xl min-w-[200px] max-w-[280px]">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{item.label}</span>
-                      {item.shortcut && <span className="text-xs opacity-60 bg-gray-800 dark:bg-gray-200 px-1.5 py-0.5 rounded">{item.shortcut}</span>}
-                    </div>
-                    <p className="text-xs opacity-70 mt-1 whitespace-normal">{item.description}</p>
-                  </div>
                 </button>
               ))}
             </div>
@@ -164,6 +165,26 @@ export const Sidebar: React.FC = () => {
 
       {/* Spacer */}
       <div className="flex-grow" />
+
+      {hoveredItem && (
+        <div 
+          className="fixed z-[9999] ml-2 px-3 py-2 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg shadow-xl pointer-events-none min-w-[200px] max-w-[280px]"
+          style={{ 
+            top: hoveredItem.top, 
+            left: '4rem' 
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <span className="font-medium">{hoveredItem.item.label}</span>
+            {hoveredItem.item.shortcut && (
+              <span className="text-xs opacity-60 bg-gray-800 dark:bg-gray-200 px-1.5 py-0.5 rounded">
+                {hoveredItem.item.shortcut}
+              </span>
+            )}
+          </div>
+          <p className="text-xs opacity-70 mt-1 whitespace-normal">{hoveredItem.item.description}</p>
+        </div>
+      )}
     </div>
   );
 };

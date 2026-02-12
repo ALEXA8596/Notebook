@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '../store/store';
 import { useTaskStore, Task } from '../store/taskStore';
+import { getModifierKey } from '../lib/platform';
 import clsx from 'clsx';
 
 type CommandCategory = 'file' | 'navigation' | 'task' | 'settings' | 'action';
@@ -37,6 +38,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
   } = useAppStore();
   
   const { tasks, addTask } = useTaskStore();
+  const MOD = getModifierKey();
   
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -56,7 +58,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
       category: 'navigation',
       keywords: ['graph', 'network', 'connections', 'links'],
       action: () => window.dispatchEvent(new CustomEvent('app-open-graph')),
-      shortcut: '⌘G',
+      shortcut: `${MOD}G`,
     });
     
     cmds.push({
@@ -67,7 +69,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
       category: 'navigation',
       keywords: ['search', 'find', 'query'],
       action: () => window.dispatchEvent(new CustomEvent('app-toggle-search')),
-      shortcut: '⌘F',
+      shortcut: `${MOD}F`,
     });
     
     cmds.push({
@@ -119,7 +121,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
       category: 'action',
       keywords: ['save', 'write'],
       action: () => window.dispatchEvent(new CustomEvent('app-save')),
-      shortcut: '⌘S',
+      shortcut: `${MOD}S`,
     });
     
     cmds.push({
@@ -140,7 +142,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
       category: 'action',
       keywords: ['new', 'create', 'note', 'file'],
       action: () => window.dispatchEvent(new CustomEvent('app-new-file')),
-      shortcut: '⌘N',
+      shortcut: `${MOD}N`,
     });
     
     cmds.push({
@@ -162,7 +164,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
       category: 'settings',
       keywords: ['settings', 'preferences', 'config'],
       action: () => window.dispatchEvent(new CustomEvent('app-open-settings')),
-      shortcut: '⌘,',
+      shortcut: `${MOD},`,
     });
     
     cmds.push({

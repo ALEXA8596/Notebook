@@ -6,6 +6,7 @@ import {
   Clock, Star, Layout, Layers, Sparkles, Coffee, Mail,
   ChevronRight, Globe, Database, Cloud
 } from 'lucide-react';
+import { getModifierKey } from '../lib/platform';
 import clsx from 'clsx';
 
 interface AboutModalProps {
@@ -22,6 +23,8 @@ const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'system', label: 'System Info', icon: Code },
   { id: 'credits', label: 'Credits', icon: Heart },
 ];
+
+const MOD = getModifierKey();
 
 const features = [
   {
@@ -64,7 +67,7 @@ const features = [
     icon: Zap,
     color: 'text-amber-500',
     items: [
-      { name: 'Command Palette', desc: 'Access any command instantly with ⌘K' },
+      { name: 'Command Palette', desc: `Access any command instantly with ${MOD}K` },
       { name: 'Focus Mode', desc: 'Distraction-free writing with Pomodoro timer' },
       { name: 'Activity Insights', desc: 'Track your productivity with detailed analytics' },
       { name: 'Autosave', desc: 'Never lose work with automatic saving' },
@@ -129,28 +132,28 @@ const features = [
 
 const shortcuts = [
   { category: 'General', items: [
-    { keys: ['⌘', 'K'], desc: 'Open Command Palette' },
-    { keys: ['⌘', 'O'], desc: 'Quick Switcher' },
-    { keys: ['⌘', 'S'], desc: 'Save Current File' },
-    { keys: ['⌘', 'N'], desc: 'New Note' },
-    { keys: ['⌘', 'Shift', 'F'], desc: 'Search in Files' },
-    { keys: ['⌘', ','], desc: 'Open Settings' },
+    { keys: [MOD, 'K'], desc: 'Open Command Palette' },
+    { keys: [MOD, 'O'], desc: 'Quick Switcher' },
+    { keys: [MOD, 'S'], desc: 'Save Current File' },
+    { keys: [MOD, 'N'], desc: 'New Note' },
+    { keys: [MOD, 'Shift', 'F'], desc: 'Search in Files' },
+    { keys: [MOD, ','], desc: 'Open Settings' },
   ]},
   { category: 'Editor', items: [
-    { keys: ['⌘', 'B'], desc: 'Bold' },
-    { keys: ['⌘', 'I'], desc: 'Italic' },
-    { keys: ['⌘', 'K'], desc: 'Insert Link' },
-    { keys: ['⌘', 'Shift', 'C'], desc: 'Code Block' },
-    { keys: ['⌘', '['], desc: 'Decrease Indent' },
-    { keys: ['⌘', ']'], desc: 'Increase Indent' },
-    { keys: ['⌘', '/'], desc: 'Toggle Comment' },
+    { keys: [MOD, 'B'], desc: 'Bold' },
+    { keys: [MOD, 'I'], desc: 'Italic' },
+    { keys: [MOD, 'K'], desc: 'Insert Link' },
+    { keys: [MOD, 'Shift', 'C'], desc: 'Code Block' },
+    { keys: [MOD, '['], desc: 'Decrease Indent' },
+    { keys: [MOD, ']'], desc: 'Increase Indent' },
+    { keys: [MOD, '/'], desc: 'Toggle Comment' },
   ]},
   { category: 'Navigation', items: [
-    { keys: ['⌘', 'Click'], desc: 'Open Link in New Tab' },
+    { keys: [MOD, 'Click'], desc: 'Open Link in New Tab' },
     { keys: ['Alt', '←'], desc: 'Go Back' },
     { keys: ['Alt', '→'], desc: 'Go Forward' },
-    { keys: ['⌘', 'G'], desc: 'Open Graph View' },
-    { keys: ['⌘', 'T'], desc: 'Open Tasks' },
+    { keys: [MOD, 'G'], desc: 'Open Graph View' },
+    { keys: [MOD, 'T'], desc: 'Open Tasks' },
   ]},
 ];
 
@@ -245,7 +248,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
-                    <span>Create your first note using the + button or ⌘N</span>
+                    <span>Create your first note using the + button or {MOD}N</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>

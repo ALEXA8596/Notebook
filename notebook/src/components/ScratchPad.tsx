@@ -3,6 +3,7 @@ import {
   StickyNote, Plus, X, Trash2, Pin, PinOff, Palette,
   GripVertical, Minimize2, Maximize2, Clock, Grid, List, Search
 } from 'lucide-react';
+import { getModifierKey } from '../lib/platform';
 import clsx from 'clsx';
 import { useAppStore } from '../store/store';
 
@@ -428,7 +429,7 @@ export const FloatingQuickNote: React.FC<FloatingQuickNoteProps> = ({ isOpen, on
         />
         
         <div className="flex items-center justify-between px-3 py-2 border-t border-black/5 dark:border-white/5">
-          <span className="text-xs text-gray-400">⌘+Enter to save</span>
+          <span className="text-xs text-gray-400">{getModifierKey()}+Enter to save</span>
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}

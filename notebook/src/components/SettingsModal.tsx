@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Modal } from './ui/Modal';
 import { useAppStore, AIProvider } from '../store/store';
+import { getModifierKey } from '../lib/platform';
 import { Plus, Trash2, Eye, EyeOff, RefreshCw, Folder, ExternalLink, Settings, Shield, Palette } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -370,7 +371,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   { id: 'quicknote', icon: '📝', label: 'Quick Note', category: 'tools' },
                   { id: 'stickies', icon: '⊞', label: 'All Stickies', category: 'tools' },
                   { id: 'copilot', icon: '🤖', label: 'AI Copilot', category: 'tools' },
-                  { id: 'command', icon: '⌘', label: 'Command Palette', category: 'tools' },
+                  { id: 'command', icon: getModifierKey(), label: 'Command Palette', category: 'tools' },
                   { id: 'cloud', icon: '☁️', label: 'Cloud Sync', category: 'tools' },
                   { id: 'save', icon: '💾', label: 'Save', category: 'system' },
                   { id: 'folder', icon: '📂', label: 'Open Folder', category: 'system' },

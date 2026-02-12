@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Keyboard } from 'lucide-react';
+import { getModifierKey } from '../lib/platform';
 
 interface KeyboardShortcutsProps {
   isOpen: boolean;
@@ -11,29 +12,31 @@ interface ShortcutGroup {
   shortcuts: { keys: string[]; description: string }[];
 }
 
+const MOD = getModifierKey();
+
 const shortcutGroups: ShortcutGroup[] = [
   {
     title: 'General',
     shortcuts: [
-      { keys: ['⌘', 'S'], description: 'Save all unsaved changes' },
-      { keys: ['⌘', 'O'], description: 'Quick file switcher' },
-      { keys: ['⌘', 'K'], description: 'Open command palette' },
-      { keys: ['⌘', '/'], description: 'Toggle search' },
-      { keys: ['⌘', '?'], description: 'Show keyboard shortcuts' },
-      { keys: ['⌘', 'N'], description: 'Create new note' },
-      { keys: ['⌘', 'Shift', 'N'], description: 'Quick note (sticky)' },
+      { keys: [MOD, 'S'], description: 'Save all unsaved changes' },
+      { keys: [MOD, 'O'], description: 'Quick file switcher' },
+      { keys: [MOD, 'K'], description: 'Open command palette' },
+      { keys: [MOD, '/'], description: 'Toggle search' },
+      { keys: [MOD, '?'], description: 'Show keyboard shortcuts' },
+      { keys: [MOD, 'N'], description: 'Create new note' },
+      { keys: [MOD, 'Shift', 'N'], description: 'Quick note (sticky)' },
     ]
   },
   {
     title: 'Editor',
     shortcuts: [
-      { keys: ['⌘', 'B'], description: 'Bold text' },
-      { keys: ['⌘', 'I'], description: 'Italic text' },
-      { keys: ['⌘', 'U'], description: 'Underline text' },
-      { keys: ['⌘', 'Shift', 'K'], description: 'Strikethrough' },
-      { keys: ['⌘', 'E'], description: 'Inline code' },
-      { keys: ['⌘', 'L'], description: 'Insert link' },
-      { keys: ['⌘', 'Shift', 'X'], description: 'Toggle checkbox' },
+      { keys: [MOD, 'B'], description: 'Bold text' },
+      { keys: [MOD, 'I'], description: 'Italic text' },
+      { keys: [MOD, 'U'], description: 'Underline text' },
+      { keys: [MOD, 'Shift', 'K'], description: 'Strikethrough' },
+      { keys: [MOD, 'E'], description: 'Inline code' },
+      { keys: [MOD, 'L'], description: 'Insert link' },
+      { keys: [MOD, 'Shift', 'X'], description: 'Toggle checkbox' },
       { keys: ['Tab'], description: 'Indent / autocomplete' },
       { keys: ['Shift', 'Tab'], description: 'Outdent' },
     ]
@@ -41,13 +44,13 @@ const shortcutGroups: ShortcutGroup[] = [
   {
     title: 'Navigation',
     shortcuts: [
-      { keys: ['⌘', 'P'], description: 'Quick switcher' },
-      { keys: ['⌘', 'Shift', 'F'], description: 'Global search' },
-      { keys: ['⌘', 'G'], description: 'Open graph view' },
-      { keys: ['⌘', '\\'], description: 'Toggle sidebar' },
-      { keys: ['⌘', 'W'], description: 'Close current tab' },
-      { keys: ['⌘', 'Tab'], description: 'Next tab' },
-      { keys: ['⌘', 'Shift', 'Tab'], description: 'Previous tab' },
+      { keys: [MOD, 'P'], description: 'Quick switcher' },
+      { keys: [MOD, 'Shift', 'F'], description: 'Global search' },
+      { keys: [MOD, 'G'], description: 'Open graph view' },
+      { keys: [MOD, '\\'], description: 'Toggle sidebar' },
+      { keys: [MOD, 'W'], description: 'Close current tab' },
+      { keys: [MOD, 'Tab'], description: 'Next tab' },
+      { keys: [MOD, 'Shift', 'Tab'], description: 'Previous tab' },
     ]
   },
   {
