@@ -78,10 +78,18 @@ class ImageWidget extends WidgetType {
       // Construct the full path
       const fullImagePath = `${normalizedVaultPath}/${normalizedSrc}`;
       
-      // URL encode the path but keep forward slashes
-      const encodedPath = fullImagePath.split('/').map(segment => encodeURIComponent(segment)).join('/');
+      // URL encode the path segments but keep forward slashes
+      // Don't encode drive letter colon (e.g., C:)
+      const encodedPath = fullImagePath.split('/').map((segment, i) => {
+        // First segment might be drive letter like "C:" - don't encode the colon
+        if (i === 0 && /^[a-zA-Z]:$/.test(segment)) {
+          return segment;
+        }
+        return encodeURIComponent(segment);
+      }).join('/');
       
-      img.src = `local-file://${encodedPath}`;
+      // Use three slashes for absolute paths (local-file:///C:/...)
+      img.src = `local-file:///${encodedPath}`;
     } else {
       img.src = this.src;
     }

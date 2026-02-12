@@ -444,18 +444,18 @@ function App() {
     }
   }, [theme]);
 
-  // Autosave effect
+  // Instant save on edit - debounced to batch rapid changes
   useEffect(() => {
-    if (autosaveEnabled && unsavedChanges.size > 0) {
+    if (unsavedChanges.size > 0) {
       // Clear existing timer
       if (autosaveTimerRef.current) {
         clearTimeout(autosaveTimerRef.current);
       }
       
-      // Set new timer
+      // Save after a short debounce (300ms) to batch rapid edits
       autosaveTimerRef.current = setTimeout(() => {
         handleSave(true);
-      }, autosaveInterval * 1000);
+      }, 300);
     }
     
     return () => {
@@ -463,7 +463,7 @@ function App() {
         clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [autosaveEnabled, autosaveInterval, unsavedChanges, handleSave]);
+  }, [unsavedChanges, handleSave]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

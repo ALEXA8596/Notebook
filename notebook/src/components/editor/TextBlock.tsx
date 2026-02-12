@@ -429,11 +429,23 @@ export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onConte
     
     // Don't reinitialize if already exists
     if (editorViewRef.current) {
-      // Update content if changed externally
-      const currentContent = editorViewRef.current.state.doc.toString();
+      // Update content if changed externally, preserving cursor
+      const view = editorViewRef.current;
+      const currentContent = view.state.doc.toString();
       if (value !== currentContent) {
-        editorViewRef.current.dispatch({
+        const selection = view.state.selection;
+        const scrollPosition = view.scrollDOM.scrollTop;
+        
+        view.dispatch({
           changes: { from: 0, to: currentContent.length, insert: value },
+          selection: {
+            anchor: Math.min(selection.main.anchor, value.length),
+            head: Math.min(selection.main.head, value.length),
+          },
+        });
+        
+        requestAnimationFrame(() => {
+          view.scrollDOM.scrollTop = scrollPosition;
         });
       }
       return;
@@ -509,7 +521,11 @@ Add tasks with - [ ] syntax.`),
       view.destroy();
       editorViewRef.current = null;
     };
-  }, [viewMode, livePreviewCompartment, smartListExtension, wikiLinkCompletion, fileDirectory]);
+    // Note: Only depend on viewMode to avoid unnecessary recreation.
+    // livePreviewCompartment and smartListExtension are stable refs.
+    // fileDirectory updates are handled by a separate useEffect for reconfiguration.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode]);
 
   // Toggle live preview when mode changes
   useEffect(() => {
@@ -587,10 +603,25 @@ Add tasks with - [ ] syntax.`),
       
       // Update CodeMirror if it exists
       if (editorViewRef.current) {
-        const currentContent = editorViewRef.current.state.doc.toString();
+        const view = editorViewRef.current;
+        const currentContent = view.state.doc.toString();
         if (content !== currentContent) {
-          editorViewRef.current.dispatch({
+          // Preserve cursor position when updating content
+          const selection = view.state.selection;
+          const scrollPosition = view.scrollDOM.scrollTop;
+          
+          view.dispatch({
             changes: { from: 0, to: currentContent.length, insert: content },
+            // Try to restore selection, clamped to new document length
+            selection: {
+              anchor: Math.min(selection.main.anchor, content.length),
+              head: Math.min(selection.main.head, content.length),
+            },
+          });
+          
+          // Restore scroll position
+          requestAnimationFrame(() => {
+            view.scrollDOM.scrollTop = scrollPosition;
           });
         }
       }

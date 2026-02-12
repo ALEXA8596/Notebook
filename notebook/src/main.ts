@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import { watch, FSWatcher } from 'node:fs';
 import http from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
 import started from 'electron-squirrel-startup';
 
 // ==========================================
@@ -1007,7 +1008,7 @@ protocol.registerSchemesAsPrivileged([
 // Some APIs can only be used after this event occurs.
 app.on('ready', async () => {
   // Handle local-file:// protocol requests by serving files from disk
-  protocol.handle('local-file', (request) => {
+  protocol.handle('local-file', async (request) => {
     // URL format: local-file:///C:/path/to/file.png (absolute path encoded in URL)
     const url = new URL(request.url);
     // Decode the pathname — on Windows url.pathname starts with /C:/...
@@ -1016,7 +1017,16 @@ app.on('ready', async () => {
     if (process.platform === 'win32' && filePath.startsWith('/')) {
       filePath = filePath.substring(1);
     }
-    return net.fetch(`file://${filePath}`);
+    
+    // Check if file exists before fetching
+    try {
+      await fs.access(filePath);
+      // Use pathToFileURL for proper conversion
+      const fileUrl = pathToFileURL(filePath).href;
+      return net.fetch(fileUrl);
+    } catch {
+      return new Response('File not found', { status: 404 });
+    }
   });
 
   await loadVaultState();

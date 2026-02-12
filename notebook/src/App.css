@@ -29,10 +29,11 @@
   left: 0;
   bottom: 0;
   width: 64px;
-  overflow: hidden;
+  overflow: visible; /* Allow tooltips to overflow */
   background-color: var(--theme-sidebar, #f3f4f6); /* gray-100 */
   flex-shrink: 0;
   will-change: background-color;
+  z-index: 100; /* Above explorer so tooltips appear above it */
 }
 
 .dark .app-sidebar,
