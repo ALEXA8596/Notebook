@@ -1,7 +1,7 @@
 {
   "name": "notebook-electron",
   "productName": "Notebook",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "A powerful note-taking application with rich embeds",
   "main": ".vite/build/main.js",
   "scripts": {

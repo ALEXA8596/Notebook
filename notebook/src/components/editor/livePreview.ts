@@ -212,15 +212,62 @@ class CodeBlockWidget extends WidgetType {
   private container: HTMLElement | null = null;
   private currentCode: string;
   private editorView: EditorView | null = null;
+  private from: number;
+  private to: number;
   
   constructor(
     readonly code: string,
     readonly language: string,
-    readonly from: number,
-    readonly to: number
+    from: number,
+    to: number
   ) {
     super();
     this.currentCode = code;
+    this.from = from;
+    this.to = to;
+  }
+
+  private resolveCurrentBlockRange(view: EditorView, expectedCode: string): { from: number; to: number; fence: string; langTag: string } | null {
+    const fullText = view.state.doc.toString();
+    const codeBlockRegex = /^(```|~~~)(\w*)\r?\n([\s\S]*?)\r?\n\1(?=\r?\n|$)/gm;
+
+    type Candidate = { from: number; to: number; fence: string; langTag: string; code: string };
+    const candidates: Candidate[] = [];
+    let match: RegExpExecArray | null;
+
+    while ((match = codeBlockRegex.exec(fullText)) !== null) {
+      const from = match.index;
+      const to = from + match[0].length;
+      candidates.push({
+        from,
+        to,
+        fence: match[1],
+        langTag: match[2] || '',
+        code: match[3],
+      });
+    }
+
+    if (candidates.length === 0) return null;
+
+    const anchor = Math.max(0, Math.min(this.from, fullText.length));
+
+    const containing = candidates.find((c) => anchor >= c.from && anchor <= c.to);
+    if (containing) {
+      return { from: containing.from, to: containing.to, fence: containing.fence, langTag: containing.langTag };
+    }
+
+    const exactCodeMatch = candidates.find((c) => c.langTag === this.language && c.code === expectedCode);
+    if (exactCodeMatch) {
+      return { from: exactCodeMatch.from, to: exactCodeMatch.to, fence: exactCodeMatch.fence, langTag: exactCodeMatch.langTag };
+    }
+
+    const nearest = candidates.reduce((best, current) => {
+      const bestDistance = Math.abs(best.from - anchor);
+      const currentDistance = Math.abs(current.from - anchor);
+      return currentDistance < bestDistance ? current : best;
+    });
+
+    return { from: nearest.from, to: nearest.to, fence: nearest.fence, langTag: nearest.langTag };
   }
 
   toDOM(view: EditorView): HTMLElement {
@@ -256,19 +303,21 @@ class CodeBlockWidget extends WidgetType {
         onChange: (newCode: string) => {
           // Only dispatch if code actually changed
           if (newCode === this.currentCode) return;
+          const previousCode = this.currentCode;
+
+          // Resolve block range from current document state to avoid stale offsets
+          const range = this.resolveCurrentBlockRange(view, previousCode);
+          if (!range) return;
+
           this.currentCode = newCode;
-          
-          // Update the code in the editor
-          const openingLine = view.state.doc.lineAt(this.from).text;
-          const langMatch = openingLine.match(/^(```|~~~)(\w*)/);
-          const fence = langMatch ? langMatch[1] : '```';
-          const langTag = langMatch ? langMatch[2] : '';
+          this.from = range.from;
+          this.to = range.to;
           
           view.dispatch({
             changes: {
-              from: this.from,
-              to: this.to,
-              insert: `${fence}${langTag}\n${newCode}\n${fence}`
+              from: range.from,
+              to: range.to,
+              insert: `${range.fence}${range.langTag}\n${newCode}\n${range.fence}`
             }
           });
         },
@@ -416,7 +465,7 @@ function findCodeBlockRanges(doc: { toString: () => string }, selection: { from:
   const ranges: Array<{ from: number; to: number; language: string; code: string }> = [];
   const fullText = doc.toString();
   // Match code blocks: opening fence with optional language, content, closing fence
-  const codeBlockRegex = /^(```|~~~)(\w*)\r?\n([\s\S]*?)\r?\n\1\s*$/gm;
+  const codeBlockRegex = /^(```|~~~)(\w*)\r?\n([\s\S]*?)\r?\n\1(?=\r?\n|$)/gm;
   let codeMatch;
   
   while ((codeMatch = codeBlockRegex.exec(fullText)) !== null) {

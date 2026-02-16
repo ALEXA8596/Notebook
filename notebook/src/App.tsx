@@ -14,6 +14,19 @@ import { HTMLEmbed } from './components/embeds/HTMLEmbed';
 import { GraphView } from './components/features/GraphView';
 import { SearchModal } from './components/modals/SearchModal';
 import { QuickSwitcher } from './components/navigation/QuickSwitcher';
+import { Homepage } from './components/layout/Homepage';
+import { TaskPanel } from './components/panels/TaskPanel';
+import { CalendarPanel } from './components/panels/CalendarPanel';
+import { InsightsPanel } from './components/panels/InsightsPanel';
+import { Whiteboard } from './components/features/Whiteboard';
+import { DiagramMaker } from './components/features/DiagramMaker';
+import { FocusMode } from './components/features/FocusMode';
+import { ScratchPad } from './components/features/ScratchPad';
+import { CopilotPanel } from './components/panels/CopilotPanel';
+import { CommandPalette } from './components/navigation/CommandPalette';
+import { CloudSyncPanel } from './components/panels/CloudSyncPanel';
+import { AboutModal } from './components/modals/AboutModal';
+import { SettingsModal } from './components/modals/SettingsModal';
 import { useAppStore } from './store/store';
 import { loadFileStructure, readFileContent, saveFileContent } from './lib/fileSystem';
 import { Layout, Model, TabNode, IJsonModel, Actions, DockLocation } from 'flexlayout-react';
@@ -147,6 +160,10 @@ function App() {
   const [model, setModel] = useState<Model>(Model.fromJson(defaultLayout));
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isQuickSwitcherOpen, setIsQuickSwitcherOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isFocusModeOpen, setIsFocusModeOpen] = useState(false);
+  const [isAboutOpen, setIsAboutOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
 
   // Show vault manager if no vault is open
@@ -225,46 +242,54 @@ function App() {
     };
   }, [handleSave]);
 
+  // Actions
+  const openTab = useCallback((component: string, name: string, id: string, location: DockLocation = DockLocation.CENTER) => {
+    const activeTabset = model.getActiveTabset();
+    const fallbackParent = model.getRoot().getChildren()[0]?.getId();
+    // Prefer active tabset, otherwise fallback to root's first child
+    const parentId = activeTabset ? activeTabset.getId() : fallbackParent;
+
+    if (!parentId) return;
+
+    try {
+      const existing = model.getNodeById(id);
+      if (existing) {
+        model.doAction(Actions.selectTab(id));
+      } else {
+        model.doAction(Actions.addNode({
+          type: 'tab',
+          component: component,
+          name: name,
+          id: id,
+          enableClose: true,
+          enableDrag: true,
+          enableRename: false,
+        }, parentId, location, -1));
+      }
+    } catch (e) {
+      console.error("Failed to open tab", e);
+    }
+  }, [model]);
+
+  const openGraph = useCallback(() => openTab('graph', 'Graph View', 'graph-view', DockLocation.RIGHT), [openTab]);
+  const openHomepage = useCallback(() => openTab('homepage', 'Home', 'homepage', DockLocation.CENTER), [openTab]);
+  const openTasks = useCallback(() => openTab('tasks', 'Tasks', 'tasks-panel', DockLocation.RIGHT), [openTab]);
+  const openCalendar = useCallback(() => openTab('calendar', 'Calendar', 'calendar-panel', DockLocation.RIGHT), [openTab]);
+  const openInsights = useCallback(() => openTab('insights', 'Insights', 'insights-panel', DockLocation.RIGHT), [openTab]);
+  const openWhiteboard = useCallback(() => openTab('whiteboard', 'Whiteboard', 'whiteboard-panel', DockLocation.CENTER), [openTab]);
+  const openDiagram = useCallback(() => openTab('diagram', 'Diagram', 'diagram-panel', DockLocation.CENTER), [openTab]);
+  const openCopilot = useCallback(() => openTab('copilot', 'Copilot', 'copilot-panel', DockLocation.RIGHT), [openTab]);
+  const openCloudSync = useCallback(() => openTab('cloud', 'Cloud Sync', 'cloud-sync-panel', DockLocation.RIGHT), [openTab]);
+  const openScratchPad = useCallback(() => openTab('scratchpad', 'ScratchPad', 'scratchpad-panel', DockLocation.RIGHT), [openTab]);
+
+  const toggleSearch = useCallback(() => setIsSearchOpen(true), []);
+  const toggleCommandPalette = useCallback(() => setIsCommandPaletteOpen(true), []);
+  const toggleFocusMode = useCallback(() => setIsFocusModeOpen(true), []);
+  const toggleAbout = useCallback(() => setIsAboutOpen(true), []);
+  const toggleSettings = useCallback(() => setIsSettingsOpen(true), []);
+
   // Event Listeners for Sidebar
   useEffect(() => {
-    const openGraph = () => {
-      const activeTabset = model.getActiveTabset();
-      const fallbackParent = model.getRoot().getChildren()[0]?.getId();
-      const parentId = activeTabset ? activeTabset.getId() : fallbackParent;
-
-      if (!parentId) return;
-
-      try {
-        const existing = model.getNodeById('graph-view');
-        if (existing) {
-          model.doAction(Actions.selectTab('graph-view'));
-        } else {
-          model.doAction(Actions.addNode({
-            type: 'tab',
-            component: 'graph',
-            name: 'Graph View',
-            id: 'graph-view',
-            enableClose: true,
-            enableDrag: true,
-            enableRename: false,
-          }, parentId, DockLocation.RIGHT, -1));
-        }
-      } catch (e) {
-        if (parentId) {
-          model.doAction(Actions.addNode({
-              type: 'tab',
-              component: 'graph',
-              name: 'Graph View',
-              id: 'graph-view',
-              enableDrag: true,
-              enableRename: false,
-          }, parentId, DockLocation.RIGHT, -1));
-        }
-      }
-    };
-
-    const toggleSearch = () => setIsSearchOpen(true);
-
     const openToRight = (e: CustomEvent<{ path: string }>) => {
       const filePath = e.detail.path;
       const fileName = filePath.split('\\').pop() || filePath;
@@ -286,12 +311,45 @@ function App() {
     window.addEventListener('app-open-graph', openGraph);
     window.addEventListener('app-toggle-search', toggleSearch);
     window.addEventListener('app-open-to-right', openToRight as EventListener);
+    window.addEventListener('app-open-homepage', openHomepage);
+    window.addEventListener('app-open-tasks', openTasks);
+    window.addEventListener('app-open-calendar', openCalendar);
+    window.addEventListener('app-open-insights', openInsights);
+    window.addEventListener('app-open-whiteboard', openWhiteboard);
+    window.addEventListener('app-open-diagram', openDiagram);
+    window.addEventListener('app-open-copilot', openCopilot);
+    window.addEventListener('app-open-cloudsync', openCloudSync);
+    window.addEventListener('app-open-stickies', openScratchPad);
+    window.addEventListener('app-open-quicknote', openScratchPad);
+    window.addEventListener('app-open-command-palette', toggleCommandPalette);
+    window.addEventListener('app-open-focus-mode', toggleFocusMode);
+    window.addEventListener('app-open-about', toggleAbout);
+    window.addEventListener('app-open-settings', toggleSettings);
+
     return () => {
       window.removeEventListener('app-open-graph', openGraph);
       window.removeEventListener('app-toggle-search', toggleSearch);
       window.removeEventListener('app-open-to-right', openToRight as EventListener);
+      window.removeEventListener('app-open-homepage', openHomepage);
+      window.removeEventListener('app-open-tasks', openTasks);
+      window.removeEventListener('app-open-calendar', openCalendar);
+      window.removeEventListener('app-open-insights', openInsights);
+      window.removeEventListener('app-open-whiteboard', openWhiteboard);
+      window.removeEventListener('app-open-diagram', openDiagram);
+      window.removeEventListener('app-open-copilot', openCopilot);
+      window.removeEventListener('app-open-cloudsync', openCloudSync);
+      window.removeEventListener('app-open-stickies', openScratchPad);
+      window.removeEventListener('app-open-quicknote', openScratchPad);
+      window.removeEventListener('app-open-command-palette', toggleCommandPalette);
+      window.removeEventListener('app-open-focus-mode', toggleFocusMode);
+      window.removeEventListener('app-open-about', toggleAbout);
+      window.removeEventListener('app-open-settings', toggleSettings);
     };
-  }, [model]);
+  }, [
+    model, openGraph, openHomepage, openTasks, openCalendar, openInsights, 
+    openWhiteboard, openDiagram, openCopilot, openCloudSync, openScratchPad,
+    toggleSearch, toggleCommandPalette, toggleFocusMode, toggleAbout, toggleSettings
+  ]);
 
   // Sync activeFile from Explorer to Layout
   useEffect(() => {
@@ -326,16 +384,46 @@ function App() {
     const component = node.getComponent();
     if (component === 'welcome') {
       return (
-        <div className="p-6 h-full">
-          <h2 className="text-xl font-semibold mb-4">Welcome to Notebook</h2>
+        <div className="p-6 h-full bg-white dark:bg-gray-900 overflow-y-auto">
+          <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-100">Welcome to Notebook</h2>
           <p className="text-gray-600 dark:text-gray-400">Open a file from the explorer to get started.</p>
           <p className="text-gray-500 dark:text-gray-500 mt-2 text-sm">Try dragging this tab to split the view!</p>
+          <div className="mt-8 border-t border-gray-200 dark:border-gray-800 pt-4">
+            <h3 className="text-lg font-medium mb-2 text-gray-700 dark:text-gray-300">Quick Start</h3>
+            <ul className="list-disc ml-5 space-y-1 text-gray-600 dark:text-gray-400">
+              <li>Press <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-700 text-xs text-gray-800 dark:text-gray-300 font-mono">Ctrl+P</kbd> to search files</li>
+              <li>Press <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-700 text-xs text-gray-800 dark:text-gray-300 font-mono">Ctrl+K</kbd> for commands</li>
+              <li>Press <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-700 text-xs text-gray-800 dark:text-gray-300 font-mono">Ctrl+S</kbd> to save</li>
+            </ul>
+          </div>
         </div>
       );
     }
-    if (component === 'graph') {
-      return <GraphView onNodeClick={(path) => setActiveFile(path)} />;
+    if (component === 'graph') return <GraphView onNodeClick={(path) => setActiveFile(path)} />;
+    if (component === 'homepage') {
+      return (
+        <Homepage 
+          onOpenFile={(path) => setActiveFile(path)}
+          onSearch={() => setIsSearchOpen(true)}
+          onCommandPalette={() => setIsCommandPaletteOpen(true)}
+          onOpenPanel={(panelId) => {
+            if (panelId === 'tasks') openTasks();
+            else if (panelId === 'calendar') openCalendar();
+            else if (panelId === 'insights') openInsights();
+            else if (panelId === 'whiteboard') openWhiteboard();
+          }}
+        />
+      );
     }
+    if (component === 'tasks') return <TaskPanel />;
+    if (component === 'calendar') return <CalendarPanel />;
+    if (component === 'insights') return <InsightsPanel />;
+    if (component === 'whiteboard') return <Whiteboard />;
+    if (component === 'diagram') return <DiagramMaker />;
+    if (component === 'copilot') return <CopilotPanel />;
+    if (component === 'cloud') return <CloudSyncPanel />;
+    if (component === 'scratchpad') return <ScratchPad />;
+    
     if (component === 'file') {
       const path = node.getConfig()?.path || node.getId();
       return <FileTabContent path={path} />;
@@ -438,6 +526,26 @@ function App() {
         isOpen={isQuickSwitcherOpen}
         onClose={() => setIsQuickSwitcherOpen(false)}
         onOpenFile={(path) => setActiveFile(path)}
+      />
+
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+      />
+
+      <FocusMode
+        isOpen={isFocusModeOpen}
+        onClose={() => setIsFocusModeOpen(false)}
+      />
+
+      <AboutModal
+        isOpen={isAboutOpen}
+        onClose={() => setIsAboutOpen(false)}
+      />
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
     </div>
   );
