@@ -19,9 +19,9 @@ import {
   DriveFile,
   SyncProgress,
   storeSyncStatus,
-} from '../lib/googleDrive';
-import { useAppStore } from '../store/store';
-import { loadFileStructure, readFileContent } from '../lib/fileSystem';
+} from '../../lib/googleDrive';
+import { useAppStore } from '../../store/store';
+import { loadFileStructure, readFileContent } from '../../lib/fileSystem';
 import clsx from 'clsx';
 
 interface CloudSyncPanelProps {

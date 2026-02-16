@@ -3,9 +3,9 @@ import {
   StickyNote, Plus, X, Trash2, Pin, PinOff, Palette,
   GripVertical, Minimize2, Maximize2, Clock, Grid, List, Search
 } from 'lucide-react';
-import { getModifierKey } from '../lib/platform';
+import { getModifierKey } from '../../lib/platform';
 import clsx from 'clsx';
-import { useAppStore } from '../store/store';
+import { useAppStore } from '../../store/store';
 
 interface QuickNote {
   id: string;

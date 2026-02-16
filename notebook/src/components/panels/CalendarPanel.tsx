@@ -3,7 +3,7 @@ import {
   ChevronLeft, ChevronRight, Plus, Clock, 
   CalendarDays, CalendarRange, Calendar as CalendarIcon
 } from 'lucide-react';
-import { useTaskStore, Task } from '../store/taskStore';
+import { useTaskStore, Task } from '../../store/taskStore';
 import clsx from 'clsx';
 
 type CalendarView = 'month' | 'week' | 'day';

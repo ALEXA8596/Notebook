@@ -8,8 +8,8 @@ import {
   serializeEncryptedData,
   checkPasswordStrength,
   PasswordStrength 
-} from '../lib/encryption';
-import { useAppStore } from '../store/store';
+} from '../../lib/encryption';
+import { useAppStore } from '../../store/store';
 import clsx from 'clsx';
 
 interface EncryptedNoteModalProps {

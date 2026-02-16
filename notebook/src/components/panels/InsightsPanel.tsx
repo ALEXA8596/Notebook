@@ -4,7 +4,7 @@ import {
   Calendar, Target, Award, Zap, Coffee, Brain, Sun, Moon,
   ChevronLeft, ChevronRight, PieChart, ArrowUpRight, ArrowDownRight
 } from 'lucide-react';
-import { useTaskStore, TaskCategory, DailyInsight } from '../store/taskStore';
+import { useTaskStore, TaskCategory, DailyInsight } from '../../store/taskStore';
 import clsx from 'clsx';
 
 const CATEGORY_COLORS: Record<TaskCategory, string> = {

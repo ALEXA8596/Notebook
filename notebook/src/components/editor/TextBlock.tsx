@@ -6,6 +6,7 @@ import { readFileContent, saveImage } from '../../lib/fileSystem';
 import { getModifierKey } from '../../lib/platform';
 import { Eye, Edit3, Columns, AlertTriangle, Sparkles } from 'lucide-react';
 import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
+import { MonacoEmbed } from '../embeds/MonacoEmbed';
 
 // CodeMirror 6 imports
 import { EditorView, keymap, placeholder as cmPlaceholder, drawSelection, dropCursor, highlightActiveLine, highlightSpecialChars, rectangularSelection, crosshairCursor, lineNumbers, highlightActiveLineGutter } from '@codemirror/view';
@@ -90,7 +91,7 @@ const obsidianTheme = EditorView.theme({
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", sans-serif',
     padding: '16px 0',
     lineHeight: '1.8',
-    maxWidth: '800px',
+    maxWidth: 'min(800px, 100%)',
     margin: '0 auto',
   },
   '.cm-cursor, .cm-dropCursor': {
@@ -255,12 +256,21 @@ const EmbeddedFile: React.FC<{
   );
 };
 
+// Export ViewMode type so Editor.tsx can use it
+export type ViewMode = 'edit' | 'preview' | 'split' | 'live';
+
 interface TextBlockProps {
   content: string;
   onChange: (newContent: string) => void;
   onContextMenu?: (e: React.MouseEvent, cursorIndex?: number) => void;
   onNavigate?: (path: string) => void;
   filePath?: string;
+  fullHeight?: boolean;
+  showHeader?: boolean;
+  showToolbar?: boolean;
+  // Optional external control of view mode
+  viewMode?: ViewMode;
+  onViewModeChange?: (mode: ViewMode) => void;
 }
 
 const flattenFiles = (entries: FileEntry[], depth = 0): { name: string; path: string; depth: number }[] => {
@@ -299,12 +309,34 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
-type ViewMode = 'edit' | 'preview' | 'split' | 'live';
 
-export const TextBlock: React.FC<TextBlockProps> = ({ content, onChange, onContextMenu, onNavigate, filePath }) => {
+export const TextBlock: React.FC<TextBlockProps> = ({ 
+  content, 
+  onChange, 
+  onContextMenu, 
+  onNavigate, 
+  filePath, 
+  fullHeight = true, 
+  showHeader = true, 
+  showToolbar = true,
+  viewMode: controlledViewMode,
+  onViewModeChange 
+}) => {
   const { fileStructure, setActiveFile, activeFile, currentPath } = useAppStore();
   const [value, setValue] = useState(content);
-  const [viewMode, setViewMode] = useState<ViewMode>('live');
+  const [internalViewMode, setInternalViewMode] = useState<ViewMode>('live');
+  
+  // Use controlled view mode if provided, otherwise internal state
+  const viewMode = controlledViewMode ?? internalViewMode;
+  
+  const handleViewModeChange = (mode: ViewMode) => {
+    if (onViewModeChange) {
+      onViewModeChange(mode);
+    } else {
+      setInternalViewMode(mode);
+    }
+  };
+
   const [isTruncated, setIsTruncated] = useState(false);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement | null>(null);
@@ -629,6 +661,17 @@ Add tasks with - [ ] syntax.`),
     }
   }, [content]);
 
+  // Auto-resize textarea in edit mode to fit content
+  useEffect(() => {
+    if (viewMode === 'edit' && textareaRef.current && !fullHeight) {
+      const textarea = textareaRef.current;
+      // Reset height to auto to get the correct scrollHeight
+      textarea.style.height = 'auto';
+      // Set height to match content
+      textarea.style.height = `${Math.max(textarea.scrollHeight, 300)}px`;
+    }
+  }, [value, viewMode, fullHeight]);
+
   // Handle format events (for textarea fallback)
   useEffect(() => {
     const handleFormat = (e: CustomEvent<{ action: string }>) => {
@@ -903,7 +946,18 @@ Add tasks with - [ ] syntax.`),
   const handleContextMenu = (e: React.MouseEvent) => {
     if (onContextMenu) {
       e.preventDefault();
-      const cursorIndex = textareaRef.current?.selectionStart;
+      let cursorIndex: number | undefined;
+      
+      // Get cursor position based on current view mode
+      if (viewMode === 'live' && editorViewRef.current) {
+        // Get cursor from CodeMirror editor
+        const view = editorViewRef.current;
+        cursorIndex = view.state.selection.main.head;
+      } else if (textareaRef.current) {
+        // Get cursor from textarea
+        cursorIndex = textareaRef.current.selectionStart;
+      }
+      
       onContextMenu(e, cursorIndex);
     }
   };
@@ -968,23 +1022,23 @@ Add tasks with - [ ] syntax.`),
       {/* View mode toggle */}
       <div className="flex items-center gap-0.5 mr-3 bg-gray-200 dark:bg-gray-700 rounded-md p-0.5">
         <button
-          onClick={() => setViewMode('live')}
+          onClick={() => handleViewModeChange('live')}
           className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${viewMode === 'live' ? 'bg-purple-600 text-white' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-300 dark:hover:bg-gray-600'}`}
           title="Live preview mode (Obsidian-like)"
         >
           <Sparkles size={13} className="inline mr-1" />
           Live
         </button>
-        {/*
+        
         <button
-          onClick={() => setViewMode('edit')}
+          onClick={() => handleViewModeChange('edit')}
           className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${viewMode === 'edit' ? 'bg-purple-600 text-white' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-300 dark:hover:bg-gray-600'}`}
           title="Edit mode"
         >
           <Edit3 size={13} className="inline mr-1" />
           Edit
         </button>
-        <button
+        {/* <button
           onClick={() => setViewMode('split')}
           className={`px-2.5 py-1 rounded text-xs font-medium transition-all ${viewMode === 'split' ? 'bg-purple-600 text-white' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-300 dark:hover:bg-gray-600'}`}
           title="Split view"
@@ -999,8 +1053,8 @@ Add tasks with - [ ] syntax.`),
         >
           <Eye size={13} className="inline mr-1" />
           Preview
-        </button>
-        */}
+        </button> */}
+       
       </div>
       
       <div className="h-4 w-px bg-gray-200 dark:bg-gray-700 mx-2" />
@@ -1152,6 +1206,37 @@ Add tasks with - [ ] syntax.`),
                 {children}
               </a>
             ),
+            code: ({ className, children, node, ...props }: any) => {
+              const match = /language-(\w+)/.exec(className || '');
+              const language = match ? match[1] : 'plaintext';
+              const codeString = String(children).replace(/\n$/, '');
+              
+              // Check if this is a code block (has language class or is inside a pre tag)
+              // In react-markdown, fenced code blocks have className, inline code doesn't
+              const isCodeBlock = Boolean(className) || (node?.position && codeString.includes('\n'));
+              
+              if (isCodeBlock) {
+                return (
+                  <div className="not-prose my-4 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700" style={{ height: Math.min(400, Math.max(150, codeString.split('\n').length * 22 + 40)) }}>
+                    <MonacoEmbed 
+                      code={codeString} 
+                      language={language} 
+                      onChange={() => {}} 
+                      readOnly={true}
+                    />
+                  </div>
+                );
+              }
+              return (
+                <code className={className} {...props}>
+                  {children}
+                </code>
+              );
+            },
+            pre: ({ children }: any) => {
+              // Just pass through - the code component handles rendering
+              return <>{children}</>;
+            },
           }}
         >
           {debouncedValue || '*Start writing...*'}
@@ -1163,26 +1248,26 @@ Add tasks with - [ ] syntax.`),
   return (
     <div 
       ref={editorContainerRef}
-      className="w-full h-full flex flex-col bg-white dark:bg-gray-900 overflow-hidden"
+      className={`w-full flex flex-col bg-white dark:bg-gray-900 overflow-hidden ${fullHeight ? 'h-full' : ''}`}
       onContextMenu={handleContextMenu}
     >
-      {/* File title header */}
-      {fileName && (
+      {/* File title header - only show on first block */}
+      {showHeader && fileName && (
         <div className="px-6 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shrink-0">
           <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100 truncate">{fileName}</h1>
         </div>
       )}
       
-      <Toolbar />
+      {showToolbar && <Toolbar />}
       
-      <div className="flex-1 flex overflow-hidden">
+      <div className={fullHeight ? "flex-1 flex overflow-hidden" : "flex overflow-hidden"}>
         {/* CodeMirror Live Preview mode */}
         {viewMode === 'live' && (
-          <div className="w-full h-full overflow-hidden cm-wrapper">
+          <div className={`w-full overflow-hidden cm-wrapper ${fullHeight ? 'h-full' : ''}`}>
             <div 
               ref={cmContainerRef} 
-              className="w-full h-full overflow-auto p-6"
-              style={{ maxWidth: '900px', margin: '0 auto' }}
+              className={`w-full overflow-auto p-6 ${fullHeight ? 'h-full' : ''}`}
+              style={{ maxWidth: 'min(900px, 100%)', margin: '0 auto' }}
             />
           </div>
         )}
@@ -1202,7 +1287,7 @@ Use **bold**, *italic*, and \`code\` formatting.
 Create links with [[filename]] syntax.
 Make lists with - or 1. 
 Add tasks with - [ ] syntax.`}
-              className="flex-1 w-full p-6 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 outline-none resize-none text-base leading-7 placeholder:text-gray-400 dark:placeholder:text-gray-500 overflow-auto"
+              className={`w-full p-6 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 outline-none resize-none text-base leading-7 placeholder:text-gray-400 dark:placeholder:text-gray-500 ${fullHeight ? 'flex-1 overflow-auto' : 'overflow-hidden'}`}
               spellCheck="true"
               style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif' }}
             />

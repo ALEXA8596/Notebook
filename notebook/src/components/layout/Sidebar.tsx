@@ -4,9 +4,9 @@ import {
   Calendar, Bot, CheckSquare, CalendarDays, BarChart3, Command,
   Cloud, Pencil, Timer, StickyNote, Info, Layout, Shapes, Grid2x2
 } from 'lucide-react';
-import { useAppStore } from '../store/store';
-import { openVault, createFile } from '../lib/fileSystem';
-import { getModifierKey } from '../lib/platform';
+import { useAppStore } from '../../store/store';
+import { openVault, createFile } from '../../lib/fileSystem';
+import { getModifierKey } from '../../lib/platform';
 import clsx from 'clsx';
 
 // Sidebar item definitions

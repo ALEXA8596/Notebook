@@ -64,6 +64,11 @@ interface VaultAPI {
   onFileChanged: (callback: (data: { eventType: string; filename: string; vaultPath: string }) => void) => () => void;
 }
 
+interface SpellCheckAPI {
+  isWordMisspelled: (word: string) => boolean;
+  getWordSuggestions: (word: string) => string[];
+}
+
 interface ElectronAPI {
   // Dialog APIs
   openFolder: () => Promise<string | null>;
@@ -84,6 +89,9 @@ interface ElectronAPI {
   deleteFile: (filePath: string) => Promise<void>;
   showInExplorer: (filePath: string) => Promise<void>;
   approveExternalPaths: (paths: string[]) => Promise<boolean>;
+  
+  // Spell Check APIs
+  spellCheck: SpellCheckAPI;
   
   // Menu action listeners (returns unsubscribe function)
   onMenuAction: (callback: (action: string) => void) => () => void;

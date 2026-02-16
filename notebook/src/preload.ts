@@ -1,7 +1,7 @@
 // See the Electron documentation for details on how to use preload scripts:
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 
-import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer, IpcRendererEvent, webFrame } from 'electron';
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
@@ -26,6 +26,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteFile: (filePath: string) => ipcRenderer.invoke('fs:deleteFile', filePath),
   showInExplorer: (filePath: string) => ipcRenderer.invoke('fs:showInExplorer', filePath),
   approveExternalPaths: (paths: string[]) => ipcRenderer.invoke('fs:approveExternalPaths', paths),
+
+  // Spell Check APIs (using Chromium's built-in spellchecker)
+  spellCheck: {
+    isWordMisspelled: (word: string): boolean => webFrame.isWordMisspelled(word),
+    getWordSuggestions: (word: string): string[] => webFrame.getWordSuggestions(word),
+  },
 
   // Menu action listeners (returns unsubscribe function)
   onMenuAction: (callback: (action: string) => void) => {

@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import { CopilotPanel } from './components/CopilotPanel';
+import { CopilotPanel } from './components/panels/CopilotPanel';
 import './index.css';
 
 // Check if this is the copilot window

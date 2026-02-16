@@ -4,9 +4,9 @@ import {
   ListTodo, BarChart3, Network, Bot, Moon, Sun, 
   FolderOpen, Plus, Save, Keyboard, X, Hash, Clock, Tag
 } from 'lucide-react';
-import { useAppStore } from '../store/store';
-import { useTaskStore, Task } from '../store/taskStore';
-import { getModifierKey } from '../lib/platform';
+import { useAppStore } from '../../store/store';
+import { useTaskStore, Task } from '../../store/taskStore';
+import { getModifierKey } from '../../lib/platform';
 import clsx from 'clsx';
 
 type CommandCategory = 'file' | 'navigation' | 'task' | 'settings' | 'action';

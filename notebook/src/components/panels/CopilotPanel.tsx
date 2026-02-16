@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { useAppStore, FileEntry } from '../store/store';
+import { useAppStore, FileEntry } from '../../store/store';
 import { Send, Bot, User, Loader2, Settings, Trash2, FileText, FolderTree } from 'lucide-react';
 import { createTwoFilesPatch } from 'diff';
 import ReactMarkdown from 'react-markdown';
