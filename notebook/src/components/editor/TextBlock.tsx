@@ -268,6 +268,8 @@ interface TextBlockProps {
   fullHeight?: boolean;
   showHeader?: boolean;
   showToolbar?: boolean;
+  onVerticalBoundary?: (direction: 'up' | 'down', column: number) => void;
+  focusRequest?: { token: number; position: 'start' | 'end'; column?: number } | null;
   // Optional external control of view mode
   viewMode?: ViewMode;
   onViewModeChange?: (mode: ViewMode) => void;
@@ -319,6 +321,8 @@ export const TextBlock: React.FC<TextBlockProps> = ({
   fullHeight = true, 
   showHeader = true, 
   showToolbar = true,
+  onVerticalBoundary,
+  focusRequest,
   viewMode: controlledViewMode,
   onViewModeChange 
 }) => {
@@ -348,6 +352,10 @@ export const TextBlock: React.FC<TextBlockProps> = ({
   const [autocompleteQuery, setAutocompleteQuery] = useState('');
   const [autocompletePosition, setAutocompletePosition] = useState({ top: 0, left: 0 });
   const [selectedIndex, setSelectedIndex] = useState(0);
+
+  const preventTextDrag = useCallback((e: React.DragEvent<HTMLElement>) => {
+    e.preventDefault();
+  }, []);
   
   const flatFiles = useMemo(() => flattenFiles(fileStructure), [fileStructure]);
   const lastExternalContent = useRef(content);
@@ -456,6 +464,37 @@ export const TextBlock: React.FC<TextBlockProps> = ({
     }]);
   }, []);
 
+  const verticalBoundaryExtension = useMemo(() => {
+    return keymap.of([
+      {
+        key: 'ArrowUp',
+        run: (view: EditorView) => {
+          if (!onVerticalBoundary) return false;
+          const selection = view.state.selection.main;
+          if (!selection.empty) return false;
+          const line = view.state.doc.lineAt(selection.head);
+          if (line.number !== 1) return false;
+          const column = selection.head - line.from;
+          onVerticalBoundary('up', column);
+          return true;
+        },
+      },
+      {
+        key: 'ArrowDown',
+        run: (view: EditorView) => {
+          if (!onVerticalBoundary) return false;
+          const selection = view.state.selection.main;
+          if (!selection.empty) return false;
+          const line = view.state.doc.lineAt(selection.head);
+          if (line.number !== view.state.doc.lines) return false;
+          const column = selection.head - line.from;
+          onVerticalBoundary('down', column);
+          return true;
+        },
+      },
+    ]);
+  }, [onVerticalBoundary]);
+
   // Initialize CodeMirror
   useEffect(() => {
     if (!cmContainerRef.current || (viewMode !== 'edit' && viewMode !== 'split' && viewMode !== 'live')) return;
@@ -522,6 +561,9 @@ export const TextBlock: React.FC<TextBlockProps> = ({
       
       // Smart list continuation
       smartListExtension,
+
+      // Navigation across split text blocks (used when documents contain embeds)
+      verticalBoundaryExtension,
       
       // Live preview (controlled by compartment)
       livePreviewCompartment.of(viewMode === 'live' ? livePreviewExtension(fileDirectory) : []),
@@ -560,6 +602,33 @@ Add tasks with - [ ] syntax.`),
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode]);
 
+  // External focus handoff between split text blocks
+  useEffect(() => {
+    if (!focusRequest) return;
+
+    if (viewMode === 'live' && editorViewRef.current) {
+      const view = editorViewRef.current;
+      const targetLine = focusRequest.position === 'start' ? view.state.doc.line(1) : view.state.doc.line(view.state.doc.lines);
+      const target = targetLine.from + Math.min(focusRequest.column ?? 0, targetLine.length);
+      view.dispatch({ selection: { anchor: target } });
+      view.focus();
+      return;
+    }
+
+    if (textareaRef.current) {
+      const textarea = textareaRef.current;
+      const lineBreaks = focusRequest.position === 'start' ? -1 : textarea.value.lastIndexOf('\n');
+      const lineStart = lineBreaks + 1;
+      const lineEnd = focusRequest.position === 'start'
+        ? (textarea.value.indexOf('\n') === -1 ? textarea.value.length : textarea.value.indexOf('\n'))
+        : textarea.value.length;
+      const target = lineStart + Math.min(focusRequest.column ?? 0, Math.max(0, lineEnd - lineStart));
+      textarea.focus();
+      textarea.selectionStart = target;
+      textarea.selectionEnd = target;
+    }
+  }, [focusRequest?.token, viewMode]);
+
   // Toggle live preview when mode changes
   useEffect(() => {
     if (!editorViewRef.current) return;
@@ -575,6 +644,10 @@ Add tasks with - [ ] syntax.`),
   useEffect(() => {
     const container = cmContainerRef.current;
     if (!container) return;
+
+    const handleDragStart = (e: DragEvent) => {
+      e.preventDefault();
+    };
 
     const handlePaste = async (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
@@ -617,7 +690,11 @@ Add tasks with - [ ] syntax.`),
     };
 
     container.addEventListener('paste', handlePaste);
-    return () => container.removeEventListener('paste', handlePaste);
+    container.addEventListener('dragstart', handleDragStart);
+    return () => {
+      container.removeEventListener('paste', handlePaste);
+      container.removeEventListener('dragstart', handleDragStart);
+    };
   }, [currentPath]);
 
   // Sync content from props - only when external content changes (file switch or external update)
@@ -760,6 +837,27 @@ Add tasks with - [ ] syntax.`),
     if (!textarea) return;
 
     const { selectionStart, selectionEnd } = textarea;
+
+    // Move focus between split text blocks at boundaries (embed documents)
+    if (onVerticalBoundary && selectionStart === selectionEnd && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      const beforeCursor = value.substring(0, selectionStart);
+      const currentLineIndex = beforeCursor.split('\n').length;
+      const totalLines = value.split('\n').length;
+
+      if (e.key === 'ArrowUp' && currentLineIndex === 1) {
+        e.preventDefault();
+        onVerticalBoundary('up', selectionStart);
+        return;
+      }
+
+      if (e.key === 'ArrowDown' && currentLineIndex === totalLines) {
+        e.preventDefault();
+        const lineStart = beforeCursor.lastIndexOf('\n') + 1;
+        const column = selectionStart - lineStart;
+        onVerticalBoundary('down', column);
+        return;
+      }
+    }
 
     // Tab handling
     if (e.key === 'Tab') {
@@ -1266,6 +1364,7 @@ Add tasks with - [ ] syntax.`),
           <div className={`w-full overflow-hidden cm-wrapper ${fullHeight ? 'h-full' : ''}`}>
             <div 
               ref={cmContainerRef} 
+              onDragStart={preventTextDrag}
               className={`w-full overflow-auto p-6 ${fullHeight ? 'h-full' : ''}`}
               style={{ maxWidth: 'min(900px, 100%)', margin: '0 auto' }}
             />
@@ -1280,6 +1379,7 @@ Add tasks with - [ ] syntax.`),
               value={value}
               onChange={handleChange}
               onKeyDown={handleKeyDown}
+              onDragStart={preventTextDrag}
               readOnly={isTruncated}
               placeholder={`Start writing your note...
 

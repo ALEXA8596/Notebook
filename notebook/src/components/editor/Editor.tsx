@@ -188,6 +188,7 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange, showStatusBar
     wordInfo?: { word: string; start: number; end: number } | null;
   } | null>(null);
   const [rawModeBlocks, setRawModeBlocks] = useState<Set<string>>(new Set());
+  const [focusRequest, setFocusRequest] = useState<{ blockId: string; token: number; position: 'start' | 'end'; column?: number } | null>(null);
   const prevBlocksRef = useRef<Block[]>([]); // keep ids stable so text blocks don't remount
 
   // Calculate stats
@@ -431,6 +432,23 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange, showStatusBar
   
   // Find the first text block index to show toolbar only on it
   const firstTextBlockIndex = blocks.findIndex(b => b.type === 'text');
+
+  const handleVerticalBoundary = useCallback((currentBlockId: string, direction: 'up' | 'down', column: number) => {
+    const textBlocks = blocks.filter((block) => block.type === 'text');
+    const currentIndex = textBlocks.findIndex((block) => block.id === currentBlockId);
+    if (currentIndex === -1) return;
+
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= textBlocks.length) return;
+
+    const targetBlock = textBlocks[targetIndex];
+    setFocusRequest({
+      blockId: targetBlock.id,
+      token: Date.now(),
+      position: direction === 'up' ? 'end' : 'start',
+      column,
+    });
+  }, [blocks]);
   
   // Check if there are any embeds in the document
   const hasEmbeds = blocks.some(b => b.type !== 'text');
@@ -485,6 +503,8 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange, showStatusBar
                   fullHeight={isSingleTextBlock}
                   showHeader={!hasEmbeds}
                   showToolbar={!hasEmbeds || index === firstTextBlockIndex}
+                  onVerticalBoundary={(direction, column) => handleVerticalBoundary(block.id, direction, column)}
+                  focusRequest={focusRequest?.blockId === block.id ? { token: focusRequest.token, position: focusRequest.position, column: focusRequest.column } : null}
                   onContextMenu={(e: React.MouseEvent, idx?: number) => {
                     e.stopPropagation();
                     handleContextMenu(e, block.id, idx);
