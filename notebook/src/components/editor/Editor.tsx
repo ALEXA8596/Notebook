@@ -309,19 +309,34 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange, showStatusBar
     if (!contextMenu) return;
     
     let insertText = '';
-    if (type === 'desmos') insertText = '\n```desmos\n\n```\n';
-    if (type === 'excalidraw') insertText = '\n```excalidraw\n\n```\n';
-    if (type === 'website') insertText = '\n```website\nhttps://example.com\n```\n';
-    if (type === 'mermaid') insertText = '\n```mermaid\ngraph TD;\n    A-->B;\n```\n';
-    if (type === 'monaco') insertText = '\n```monaco\n// Write code here\nconsole.log("Hello World");\n```\n';
-    if (type === 'kanban') insertText = '\n```kanban\n\n```\n';
-    if (type === 'spreadsheet') insertText = '\n```spreadsheet\n\n```\n';
+    if (type === 'desmos') insertText = '```desmos\n\n```';
+    if (type === 'excalidraw') insertText = '```excalidraw\n\n```';
+    if (type === 'website') insertText = '```website\nhttps://example.com\n```';
+    if (type === 'mermaid') insertText = '```mermaid\ngraph TD;\n    A-->B;\n```';
+    if (type === 'monaco') insertText = '```monaco\n// Write code here\nconsole.log("Hello World");\n```';
+    if (type === 'kanban') insertText = '```kanban\n\n```';
+    if (type === 'spreadsheet') insertText = '```spreadsheet\n\n```';
 
     if (contextMenu.blockId) {
       const block = blocks.find(b => b.id === contextMenu.blockId);
       if (block && block.type === 'text') {
-        const index = contextMenu.cursorIndex !== undefined ? contextMenu.cursorIndex : block.content.length;
-        const newContent = block.content.slice(0, index) + insertText + block.content.slice(index);
+        const normalized = block.content.replace(/\r\n/g, '\n');
+        const rawIndex = contextMenu.cursorIndex !== undefined ? contextMenu.cursorIndex : normalized.length;
+        const index = Math.max(0, Math.min(rawIndex, normalized.length));
+
+        const before = normalized.slice(0, index);
+        const after = normalized.slice(index);
+
+        const needsLeadingNewline = before.length > 0 && !before.endsWith('\n');
+        const needsTrailingNewline = after.length > 0 && !after.startsWith('\n');
+
+        const newContent =
+          before +
+          (needsLeadingNewline ? '\n' : '') +
+          insertText +
+          (needsTrailingNewline ? '\n' : '') +
+          after;
+
         handleBlockChange(block.id, newContent);
       } else {
         // Append to end if not text block

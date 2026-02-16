@@ -89,7 +89,7 @@ const saveFavorites = (favorites: string[]) => {
 
 interface HomepageProps {
   onOpenFile: (path: string) => void;
-  onOpenPanel: (panel: 'tasks' | 'calendar' | 'insights' | 'graph' | 'copilot' | 'about') => void;
+  onOpenPanel: (panel: 'tasks' | 'calendar' | 'insights' | 'graph' | 'copilot' | 'about' | 'whiteboard') => void;
   onSearch: () => void;
   onCommandPalette: () => void;
 }

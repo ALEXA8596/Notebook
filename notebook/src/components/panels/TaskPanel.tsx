@@ -723,7 +723,7 @@ export const TaskPanel: React.FC = () => {
           <select
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value as any)}
-            className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-700 rounded-lg bg-transparent"
+            className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
           >
             <option value="all">All Status</option>
             <option value="todo">To Do</option>
@@ -735,7 +735,7 @@ export const TaskPanel: React.FC = () => {
           <select
             value={sortBy}
             onChange={e => setSortBy(e.target.value as any)}
-            className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-700 rounded-lg bg-transparent"
+            className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
           >
             <option value="priority">Sort by Priority</option>
             <option value="dueDate">Sort by Due Date</option>

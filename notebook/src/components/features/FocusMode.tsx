@@ -258,8 +258,6 @@ const FocusModeContent: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     return ((total - timeLeft) / total) * 100;
   };
   
-  if (!isOpen) return null;
-  
   const sessionColors = {
     focus: 'from-red-500 to-orange-500',
     shortBreak: 'from-green-500 to-emerald-500',
