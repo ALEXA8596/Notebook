@@ -33,7 +33,7 @@
   background-color: var(--theme-sidebar, #f3f4f6); /* gray-100 */
   flex-shrink: 0;
   will-change: background-color;
-  z-index: 100; /* Above explorer so tooltips appear above it */
+  z-index: 40; /* Lowered from 100 to appear below modals (z-50) */
 }
 
 .dark .app-sidebar,
@@ -48,7 +48,7 @@
   overflow: visible;
   background-color: var(--theme-sidebar, #fafafa); /* neutral-50 */
   will-change: background-color;
-  z-index: 50; /* Ensure it's above the main content if needed for dropdowns */
+  z-index: 30; /* Adjusted to be below modals (z-50) */
 }
 
 .dark .app-explorer,
@@ -102,7 +102,7 @@
   right: 0;
   width: 4px;
   cursor: col-resize;
-  z-index: 100;
+  z-index: 40; /* Lowered from 100 to appear below modals (z-50) */
   transition: background-color 0.15s;
 }
 

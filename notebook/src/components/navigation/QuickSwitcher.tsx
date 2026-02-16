@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { FileText, Pencil, GitBranch, Kanban, Table, Code, File } from 'lucide-react';
-import { useAppStore, FileEntry } from '../store/store';
+import { useAppStore, FileEntry } from '../../store/store';
 
 interface QuickSwitcherProps {
   isOpen: boolean;

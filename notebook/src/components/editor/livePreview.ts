@@ -6,11 +6,15 @@
  * - Wiki links ([[...]])
  * - External links ([...](...))
  * - Horizontal rules (---, ***, ___)
+ * - Code blocks (```language ... ```)
  */
 
 import { WidgetType, EditorView, Decoration, DecorationSet, ViewPlugin, ViewUpdate } from '@codemirror/view';
 import { syntaxTree } from '@codemirror/language';
 import { Range, StateField } from '@codemirror/state';
+import React from 'react';
+import { createRoot, Root } from 'react-dom/client';
+import { MonacoEmbed } from '../embeds/MonacoEmbed';
 
 // ========== Widget Classes ==========
 
@@ -203,18 +207,139 @@ class HorizontalRuleWidget extends WidgetType {
   }
 }
 
+class CodeBlockWidget extends WidgetType {
+  private root: Root | null = null;
+  private container: HTMLElement | null = null;
+  private currentCode: string;
+  private editorView: EditorView | null = null;
+  
+  constructor(
+    readonly code: string,
+    readonly language: string,
+    readonly from: number,
+    readonly to: number
+  ) {
+    super();
+    this.currentCode = code;
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    this.editorView = view;
+    const container = document.createElement('div');
+    this.container = container;
+    container.className = 'cm-codeblock-widget';
+    
+    // Calculate height based on line count
+    const lineCount = this.code.split('\n').length;
+    const height = Math.min(400, Math.max(100, lineCount * 20 + 20));
+    container.style.height = `${height}px`;
+    container.style.margin = '8px 0';
+    container.style.borderRadius = '8px';
+    container.style.overflow = 'hidden';
+    container.style.border = '1px solid var(--border, #374151)';
+    
+    this.renderMonaco(container, view);
+    
+    return container;
+  }
+
+  private renderMonaco(container: HTMLElement, view: EditorView) {
+    if (this.root) {
+      this.root.unmount();
+    }
+    
+    this.root = createRoot(container);
+    this.root.render(
+      React.createElement(MonacoEmbed, {
+        code: this.currentCode,
+        language: this.language,
+        onChange: (newCode: string) => {
+          // Only dispatch if code actually changed
+          if (newCode === this.currentCode) return;
+          this.currentCode = newCode;
+          
+          // Update the code in the editor
+          const openingLine = view.state.doc.lineAt(this.from).text;
+          const langMatch = openingLine.match(/^(```|~~~)(\w*)/);
+          const fence = langMatch ? langMatch[1] : '```';
+          const langTag = langMatch ? langMatch[2] : '';
+          
+          view.dispatch({
+            changes: {
+              from: this.from,
+              to: this.to,
+              insert: `${fence}${langTag}\n${newCode}\n${fence}`
+            }
+          });
+        },
+        readOnly: false
+      })
+    );
+  }
+
+  updateDOM(dom: HTMLElement, view: EditorView): boolean {
+    // Update height if line count changed significantly
+    const lineCount = this.code.split('\n').length;
+    const height = Math.min(400, Math.max(100, lineCount * 20 + 20));
+    dom.style.height = `${height}px`;
+    
+    // Update internal state - Monaco will handle its own state
+    this.currentCode = this.code;
+    this.editorView = view;
+    this.container = dom;
+    
+    // Return true to indicate we handled the update (don't recreate)
+    return true;
+  }
+
+  eq(other: CodeBlockWidget): boolean {
+    // Compare language and approximate position (allow some drift for edits)
+    // This prevents recreation when code changes but structure is same
+    // Position can drift by up to 500 chars (roughly 20 lines of edits) and still match
+    const positionClose = Math.abs(other.from - this.from) < 500;
+    return other.language === this.language && positionClose;
+  }
+
+  destroy(): void {
+    if (this.root) {
+      // Delay unmount to avoid React warning about sync unmount during render
+      setTimeout(() => {
+        this.root?.unmount();
+        this.root = null;
+      }, 0);
+    }
+  }
+
+  ignoreEvent(event: Event): boolean {
+    // Allow all events to pass through to Monaco
+    return true;
+  }
+}
+
 // ========== Decoration Builders ==========
 
-function buildDecorations(view: EditorView, vaultPath?: string): DecorationSet {
+// Build single-line decorations only (for ViewPlugin)
+function buildSingleLineDecorations(view: EditorView, vaultPath?: string, codeBlockRanges?: Array<{ from: number; to: number }>): DecorationSet {
   const widgets: Range<Decoration>[] = [];
   const doc = view.state.doc;
   
   // Get current selection to avoid decorating at cursor position
   const selection = view.state.selection.main;
   
+  // Helper to check if a position is inside a code block
+  const isInCodeBlock = (pos: number) => {
+    if (!codeBlockRanges) return false;
+    return codeBlockRanges.some(range => pos >= range.from && pos <= range.to);
+  };
+  
   for (let i = 1; i <= doc.lines; i++) {
     const line = doc.line(i);
     const lineText = line.text;
+    
+    // Skip lines inside code blocks
+    if (isInCodeBlock(line.from)) {
+      continue;
+    }
     
     // Check if cursor is on this line
     const cursorOnLine = selection.from >= line.from && selection.from <= line.to;
@@ -283,15 +408,72 @@ function buildDecorations(view: EditorView, vaultPath?: string): DecorationSet {
   return Decoration.set(widgets, true);
 }
 
-// ========== State Field for Decorations ==========
+// Embed types handled by Editor.tsx - should NOT be rendered as code blocks by livePreview
+const EMBED_TYPES = ['website', 'desmos', 'excalidraw', 'mermaid', 'monaco', 'kanban', 'spreadsheet'];
 
-export function createLivePreviewField(vaultPath?: string) {
+// Find code block ranges in document
+function findCodeBlockRanges(doc: { toString: () => string }, selection: { from: number; to: number }): Array<{ from: number; to: number; language: string; code: string }> {
+  const ranges: Array<{ from: number; to: number; language: string; code: string }> = [];
+  const fullText = doc.toString();
+  // Match code blocks: opening fence with optional language, content, closing fence
+  const codeBlockRegex = /^(```|~~~)(\w*)\r?\n([\s\S]*?)\r?\n\1\s*$/gm;
+  let codeMatch;
+  
+  while ((codeMatch = codeBlockRegex.exec(fullText)) !== null) {
+    const blockStart = codeMatch.index;
+    const blockEnd = blockStart + codeMatch[0].length;
+    const language = codeMatch[2] || 'plaintext';
+    const code = codeMatch[3];
+    
+    // Skip embed types - these are handled by Editor.tsx as separate embed blocks
+    if (EMBED_TYPES.includes(language.toLowerCase())) {
+      continue;
+    }
+    
+    // Check if cursor is inside this code block
+    const cursorInBlock = selection.from >= blockStart && selection.from <= blockEnd;
+    
+    if (!cursorInBlock) {
+      ranges.push({ from: blockStart, to: blockEnd, language, code });
+    }
+  }
+  
+  return ranges;
+}
+
+// ========== State Field for Code Block Decorations (multiline) ==========
+
+export function createCodeBlockField() {
   return StateField.define<DecorationSet>({
     create(state) {
-      return Decoration.none;
+      const selection = state.selection.main;
+      const ranges = findCodeBlockRanges(state.doc, selection);
+      const widgets: Range<Decoration>[] = [];
+      
+      for (const range of ranges) {
+        widgets.push(Decoration.replace({
+          widget: new CodeBlockWidget(range.code, range.language, range.from, range.to),
+          block: true,
+        }).range(range.from, range.to));
+      }
+      
+      return Decoration.set(widgets);
     },
     update(decorations, tr) {
-      // We'll rebuild decorations in the view plugin
+      if (tr.docChanged || tr.selection) {
+        const selection = tr.state.selection.main;
+        const ranges = findCodeBlockRanges(tr.state.doc, selection);
+        const widgets: Range<Decoration>[] = [];
+        
+        for (const range of ranges) {
+          widgets.push(Decoration.replace({
+            widget: new CodeBlockWidget(range.code, range.language, range.from, range.to),
+            block: true,
+          }).range(range.from, range.to));
+        }
+        
+        return Decoration.set(widgets);
+      }
       return decorations;
     },
     provide(field) {
@@ -300,19 +482,23 @@ export function createLivePreviewField(vaultPath?: string) {
   });
 }
 
-// ========== View Plugin for Live Updates ==========
+// ========== View Plugin for Single-Line Decorations ==========
 
 export function createLivePreviewPlugin(vaultPath?: string) {
   return ViewPlugin.fromClass(class {
     decorations: DecorationSet;
     
     constructor(view: EditorView) {
-      this.decorations = buildDecorations(view, vaultPath);
+      const selection = view.state.selection.main;
+      const codeBlockRanges = findCodeBlockRanges(view.state.doc, selection);
+      this.decorations = buildSingleLineDecorations(view, vaultPath, codeBlockRanges);
     }
     
     update(update: ViewUpdate) {
       if (update.docChanged || update.selectionSet || update.viewportChanged) {
-        this.decorations = buildDecorations(update.view, vaultPath);
+        const selection = update.state.selection.main;
+        const codeBlockRanges = findCodeBlockRanges(update.state.doc, selection);
+        this.decorations = buildSingleLineDecorations(update.view, vaultPath, codeBlockRanges);
       }
     }
   }, {
@@ -341,6 +527,12 @@ export const livePreviewTheme = EditorView.baseTheme({
     maxWidth: '100%',
     height: 'auto',
     borderRadius: '4px',
+  },
+  '.cm-codeblock-widget': {
+    display: 'block',
+    margin: '8px 0',
+    borderRadius: '8px',
+    overflow: 'hidden',
   },
   '.cm-wikilink-widget': {
     cursor: 'pointer',
@@ -531,6 +723,7 @@ export function createHeadingStylePlugin() {
 export function livePreviewExtension(vaultPath?: string) {
   return [
     livePreviewTheme,
+    createCodeBlockField(),
     createLivePreviewPlugin(vaultPath),
     createMarkdownHidingPlugin(),
     createHeadingStylePlugin(),

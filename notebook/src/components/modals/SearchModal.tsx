@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Search, File, X } from 'lucide-react';
-import { useAppStore } from '../store/store';
-import { readFileContent } from '../lib/fileSystem';
+import { useAppStore } from '../../store/store';
+import { readFileContent } from '../../lib/fileSystem';
 
 interface SearchResult {
   path: string;

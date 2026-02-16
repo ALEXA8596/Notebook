@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
-import { useAppStore } from '../store/store';
-import { buildGraph, GraphData } from '../lib/linkManager';
+import { useAppStore } from '../../store/store';
+import { buildGraph, GraphData } from '../../lib/linkManager';
 import { RefreshCw } from 'lucide-react';
 
 interface GraphViewProps {

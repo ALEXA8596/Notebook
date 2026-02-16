@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { openVault } from '../lib/fileSystem';
+import { openVault } from '../../lib/fileSystem';
 
 export interface Vault {
   name: string;

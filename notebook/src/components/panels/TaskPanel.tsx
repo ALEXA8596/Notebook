@@ -5,7 +5,7 @@ import {
   Square, MoreHorizontal, Trash2, Edit2, Link, Timer,
   ListTodo, Filter, SortAsc, Search, Sparkles, Archive
 } from 'lucide-react';
-import { useTaskStore, Task, TaskPriority, TaskStatus, TaskCategory } from '../store/taskStore';
+import { useTaskStore, Task, TaskPriority, TaskStatus, TaskCategory } from '../../store/taskStore';
 import clsx from 'clsx';
 
 const PRIORITY_COLORS: Record<TaskPriority, string> = {

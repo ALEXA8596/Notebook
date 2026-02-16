@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, Keyboard } from 'lucide-react';
-import { getModifierKey } from '../lib/platform';
+import { getModifierKey } from '../../lib/platform';
 
 interface KeyboardShortcutsProps {
   isOpen: boolean;

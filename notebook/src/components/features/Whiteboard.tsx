@@ -4,7 +4,7 @@ import {
   Trash2, Download, Save, ZoomIn, ZoomOut, Move, Palette,
   MousePointer, Grid3X3, Layers
 } from 'lucide-react';
-import { getModifierKey } from '../lib/platform';
+import { getModifierKey } from '../../lib/platform';
 import clsx from 'clsx';
 
 interface WhiteboardProps {

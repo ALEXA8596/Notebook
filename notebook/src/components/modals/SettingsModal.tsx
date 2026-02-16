@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Modal } from './ui/Modal';
-import { useAppStore, AIProvider } from '../store/store';
-import { getModifierKey } from '../lib/platform';
+import { Modal } from '../ui/Modal';
+import { useAppStore, AIProvider } from '../../store/store';
+import { getModifierKey } from '../../lib/platform';
 import { Plus, Trash2, Eye, EyeOff, RefreshCw, Folder, ExternalLink, Settings, Shield, Palette } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -13,7 +13,7 @@ import {
   AddonMeta,
   PermissionLevel,
   PluginSettingDef,
-} from '../lib/addonManager';
+} from '../../lib/addonManager';
 
 interface SettingsModalProps {
   isOpen: boolean;

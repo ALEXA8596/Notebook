@@ -6,7 +6,7 @@ import {
   Clock, Star, Layout, Layers, Sparkles, Coffee, Mail,
   ChevronRight, Globe, Database, Cloud
 } from 'lucide-react';
-import { getModifierKey } from '../lib/platform';
+import { getModifierKey } from '../../lib/platform';
 import clsx from 'clsx';
 
 interface AboutModalProps {

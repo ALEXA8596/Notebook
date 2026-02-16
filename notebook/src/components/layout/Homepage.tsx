@@ -5,9 +5,9 @@ import {
   ChevronRight, Search, Zap, Target, Coffee, Sun, Moon, Cloud,
   Folder, Edit3, BarChart3, Bot, Network, Command, Info, Timer
 } from 'lucide-react';
-import { useAppStore } from '../store/store';
-import { useTaskStore } from '../store/taskStore';
-import { getModifierKey } from '../lib/platform';
+import { useAppStore } from '../../store/store';
+import { useTaskStore } from '../../store/taskStore';
+import { getModifierKey } from '../../lib/platform';
 import clsx from 'clsx';
 
 interface Widget {
