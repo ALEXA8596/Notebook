@@ -444,9 +444,9 @@ export const FileExplorer: React.FC = () => {
 
   return (
     <div className="w-full h-full bg-gray-50 dark:bg-gray-950 border-r border-gray-200 dark:border-gray-800 flex flex-col">
-      <div className="p-2 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
-        <span className="font-semibold text-sm uppercase text-gray-500">Explorer</span>
-        <div className="flex space-x-1">
+      <div className="p-2 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center relative">
+        <span className="font-semibold text-sm uppercase text-gray-500 truncate mr-1 min-w-0 flex-1">Explorer</span>
+        <div className="flex space-x-1 flex-shrink-0">
           {/* Quick Create Dropdown */}
           <div className="relative" ref={quickCreateRef}>
             <button 

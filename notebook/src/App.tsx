@@ -360,7 +360,7 @@ function App() {
     if (resizingTarget === 'sidebar') {
       setSidebarWidth(Math.max(50, Math.min(300, e.clientX)));
     } else if (resizingTarget === 'explorer') {
-      setExplorerWidth(Math.max(100, Math.min(800, e.clientX - sidebarWidth)));
+      setExplorerWidth(Math.max(140, Math.min(800, e.clientX - sidebarWidth)));
     }
   }, [resizingTarget, sidebarWidth]);
 
