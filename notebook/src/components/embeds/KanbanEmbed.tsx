@@ -250,7 +250,7 @@ export const KanbanEmbed: React.FC<KanbanEmbedProps> = ({ dataString, onChange }
   const [columnMenuOpen, setColumnMenuOpen] = useState<string | null>(null);
 
   return (
-    <div className="w-full h-full overflow-x-auto bg-gray-100 dark:bg-gray-900 p-4">
+    <div className="w-full h-full overflow-x-auto bg-gray-100 dark:bg-gray-900 p-4" data-embed="kanban">
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="flex gap-4 h-full items-start">
           {data.columnOrder.map((columnId, columnIndex) => {

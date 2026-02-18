@@ -449,6 +449,10 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange, showStatusBar
       column,
     });
   }, [blocks]);
+
+  const handleFocusRequestHandled = useCallback((token: number) => {
+    setFocusRequest((current) => (current && current.token === token ? null : current));
+  }, []);
   
   // Check if there are any embeds in the document
   const hasEmbeds = blocks.some(b => b.type !== 'text');
@@ -505,6 +509,7 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange, showStatusBar
                   showToolbar={!hasEmbeds || index === firstTextBlockIndex}
                   onVerticalBoundary={(direction, column) => handleVerticalBoundary(block.id, direction, column)}
                   focusRequest={focusRequest?.blockId === block.id ? { token: focusRequest.token, position: focusRequest.position, column: focusRequest.column } : null}
+                  onFocusRequestHandled={handleFocusRequestHandled}
                   onContextMenu={(e: React.MouseEvent, idx?: number) => {
                     e.stopPropagation();
                     handleContextMenu(e, block.id, idx);

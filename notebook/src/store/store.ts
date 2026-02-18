@@ -325,7 +325,7 @@ const saveNotificationPreferences = (prefs: NotificationPreferences) => {
 
 // Default sidebar items
 const DEFAULT_SIDEBAR_ITEMS = [
-  'home', 'vault', 'graph', 'search', 'daily',
+  'home', 'explorer', 'vault', 'graph', 'search', 'daily',
   'tasks', 'calendar', 'insights',
   'whiteboard', 'diagram', 'focus', 'quicknote', 'stickies',
   'copilot', 'command', 'cloud',
@@ -337,7 +337,9 @@ const loadSidebarConfig = (): SidebarConfig => {
   try {
     const saved = localStorage.getItem('sidebar-config');
     if (saved) {
-      return JSON.parse(saved);
+      const parsed = JSON.parse(saved) as SidebarConfig;
+      const mergedVisibleItems = Array.from(new Set([...(parsed.visibleItems || []), ...DEFAULT_SIDEBAR_ITEMS]));
+      return { ...parsed, visibleItems: mergedVisibleItems };
     }
   } catch (e) {
     console.error('Failed to load sidebar config', e);

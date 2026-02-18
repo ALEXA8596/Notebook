@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import { VaultManager } from './components/modals/VaultManager';
 import { Sidebar } from './components/layout/Sidebar';
 import { FileExplorer } from './components/navigation/FileExplorer';
@@ -140,7 +140,9 @@ function App() {
     unsavedChanges,
     fileContents,
     setUnsaved,
-    setCurrentPath
+    setCurrentPath,
+    autosaveEnabled,
+    autosaveInterval
   } = useAppStore();
 
   // Vault state
@@ -241,6 +243,52 @@ function App() {
       window.removeEventListener('app-save', handleSave);
     };
   }, [handleSave]);
+
+  // Autosave timer - skips saving while focused on an embed
+  useEffect(() => {
+    if (!autosaveEnabled || autosaveInterval <= 0) return;
+
+    // Helper to check if focus is currently in an embed component
+    const isInEmbed = (): boolean => {
+      const active = document.activeElement;
+      if (!active) return false;
+
+      // Check if active element or any ancestor matches embed selectors
+      const embedSelectors = [
+        '.monaco-editor',           // Monaco editor (code blocks, standalone files)
+        '.excalidraw',              // Excalidraw canvas
+        '.excalidraw-container',    // Excalidraw wrapper
+        '.cm-codeblock-widget',     // Live preview code blocks
+        '[data-embed]',             // Generic embed marker
+      ];
+
+      for (const selector of embedSelectors) {
+        if (active.closest(selector)) return true;
+      }
+
+      // Also check for iframes and canvas elements (many embeds use these)
+      if (active.tagName === 'IFRAME' || active.tagName === 'CANVAS') return true;
+      if (active.closest('iframe') || active.closest('canvas')) return true;
+
+      return false;
+    };
+
+    const intervalId = setInterval(() => {
+      // Skip autosave if currently editing in an embed
+      if (isInEmbed()) {
+        console.log('Autosave skipped: user is in an embed');
+        return;
+      }
+
+      // Only save if there are unsaved changes
+      if (unsavedChanges.size > 0) {
+        console.log('Autosaving...');
+        handleSave();
+      }
+    }, autosaveInterval * 1000);
+
+    return () => clearInterval(intervalId);
+  }, [autosaveEnabled, autosaveInterval, unsavedChanges.size, handleSave]);
 
   // Actions
   const openTab = useCallback((component: string, name: string, id: string, location: DockLocation = DockLocation.CENTER) => {
@@ -438,11 +486,21 @@ function App() {
   // Resizing Logic (Sidebar/Explorer)
   const [sidebarWidth, setSidebarWidth] = useState(64);
   const [explorerWidth, setExplorerWidth] = useState(200);
+  const explorerLastWidthRef = useRef(200);
   const [resizingTarget, setResizingTarget] = useState<'sidebar' | 'explorer' | null>(null);
 
   const startResizingSidebar = useCallback(() => setResizingTarget('sidebar'), []);
   const startResizingExplorer = useCallback(() => setResizingTarget('explorer'), []);
   const stopResizing = useCallback(() => setResizingTarget(null), []);
+  const toggleExplorer = useCallback(() => {
+    setExplorerWidth((prev) => {
+      if (prev <= 0) {
+        return Math.max(140, explorerLastWidthRef.current || 200);
+      }
+      explorerLastWidthRef.current = prev;
+      return 0;
+    });
+  }, []);
 
   const resize = useCallback((e: MouseEvent) => {
     if (resizingTarget === 'sidebar') {
@@ -462,6 +520,19 @@ function App() {
       window.removeEventListener("mouseup", stopResizing);
     };
   }, [resizingTarget, resize, stopResizing]);
+
+  useEffect(() => {
+    if (explorerWidth > 0) {
+      explorerLastWidthRef.current = explorerWidth;
+    }
+  }, [explorerWidth]);
+
+  useEffect(() => {
+    window.addEventListener('app-toggle-explorer', toggleExplorer as EventListener);
+    return () => {
+      window.removeEventListener('app-toggle-explorer', toggleExplorer as EventListener);
+    };
+  }, [toggleExplorer]);
 
   // Calculate positions for absolute layout
   const explorerLeft = sidebarWidth;

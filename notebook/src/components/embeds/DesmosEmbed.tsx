@@ -100,6 +100,7 @@ export const DesmosEmbed: React.FC<DesmosEmbedProps> = ({ stateString, onChange 
   return (
     <div 
       className="w-full h-full border rounded overflow-hidden" 
+      data-embed="desmos"
       ref={containerRef}
       onBlur={handleBlur}
       onKeyDownCapture={handleKeyDown}

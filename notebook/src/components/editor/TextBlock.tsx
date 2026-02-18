@@ -54,8 +54,8 @@ const obsidianHighlightStyle = HighlightStyle.define([
   { tag: tags.strong, color: '#e06c75', fontWeight: '700' },
   { tag: tags.strikethrough, color: '#7f848e', textDecoration: 'line-through' },
 
-  // Code
-  { tag: tags.monospace, color: '#98c379', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: '3px', padding: '1px 4px' },
+  // Code - no padding here as it causes cursor positioning issues in CodeMirror
+  { tag: tags.monospace, color: '#98c379', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: '3px' },
 
   // Links  
   { tag: tags.link, color: '#7c3aed', textDecoration: 'underline' },
@@ -270,6 +270,7 @@ interface TextBlockProps {
   showToolbar?: boolean;
   onVerticalBoundary?: (direction: 'up' | 'down', column: number) => void;
   focusRequest?: { token: number; position: 'start' | 'end'; column?: number } | null;
+  onFocusRequestHandled?: (token: number) => void;
   // Optional external control of view mode
   viewMode?: ViewMode;
   onViewModeChange?: (mode: ViewMode) => void;
@@ -323,6 +324,7 @@ export const TextBlock: React.FC<TextBlockProps> = ({
   showToolbar = true,
   onVerticalBoundary,
   focusRequest,
+  onFocusRequestHandled,
   viewMode: controlledViewMode,
   onViewModeChange 
 }) => {
@@ -472,8 +474,8 @@ export const TextBlock: React.FC<TextBlockProps> = ({
           if (!onVerticalBoundary) return false;
           const selection = view.state.selection.main;
           if (!selection.empty) return false;
+          if (selection.head !== 0) return false;
           const line = view.state.doc.lineAt(selection.head);
-          if (line.number !== 1) return false;
           const column = selection.head - line.from;
           onVerticalBoundary('up', column);
           return true;
@@ -485,8 +487,8 @@ export const TextBlock: React.FC<TextBlockProps> = ({
           if (!onVerticalBoundary) return false;
           const selection = view.state.selection.main;
           if (!selection.empty) return false;
+          if (selection.head !== view.state.doc.length) return false;
           const line = view.state.doc.lineAt(selection.head);
-          if (line.number !== view.state.doc.lines) return false;
           const column = selection.head - line.from;
           onVerticalBoundary('down', column);
           return true;
@@ -612,6 +614,7 @@ Add tasks with - [ ] syntax.`),
       const target = targetLine.from + Math.min(focusRequest.column ?? 0, targetLine.length);
       view.dispatch({ selection: { anchor: target } });
       view.focus();
+      onFocusRequestHandled?.(focusRequest.token);
       return;
     }
 
@@ -626,8 +629,9 @@ Add tasks with - [ ] syntax.`),
       textarea.focus();
       textarea.selectionStart = target;
       textarea.selectionEnd = target;
+      onFocusRequestHandled?.(focusRequest.token);
     }
-  }, [focusRequest?.token, viewMode]);
+  }, [focusRequest?.token, viewMode, onFocusRequestHandled]);
 
   // Toggle live preview when mode changes
   useEffect(() => {

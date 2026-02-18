@@ -175,7 +175,7 @@ export const CSVEmbed: React.FC<CSVEmbedProps> = ({ dataString, onChange }) => {
   };
 
   return (
-    <div className="w-full h-full flex flex-col bg-white dark:bg-gray-900">
+    <div className="w-full h-full flex flex-col bg-white dark:bg-gray-900" data-embed="csv">
       {/* Toolbar */}
       <div className="flex items-center gap-1 p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
         <button

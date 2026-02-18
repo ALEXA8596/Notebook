@@ -135,6 +135,7 @@ export const ExcalidrawEmbed: React.FC<ExcalidrawEmbedProps> = ({ dataString, on
     <div 
       ref={containerRef}
       className="w-full h-full border rounded overflow-hidden relative isolate"
+      data-embed="excalidraw"
       draggable={false}
       onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
     >

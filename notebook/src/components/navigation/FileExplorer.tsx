@@ -4,6 +4,23 @@ import { FileEntry, useAppStore } from '../../store/store';
 import { createFile, createFolder, loadFileStructure } from '../../lib/fileSystem';
 import clsx from 'clsx';
 
+// Path utilities - handle both forward and backward slashes
+const getFileName = (path: string): string => {
+  const lastSep = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+  return lastSep >= 0 ? path.substring(lastSep + 1) : path;
+};
+
+const getParentDir = (path: string): string => {
+  const lastSep = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+  return lastSep >= 0 ? path.substring(0, lastSep) : '';
+};
+
+const joinPath = (base: string, name: string): string => {
+  // Normalize to forward slashes for consistency
+  const normalizedBase = base.replace(/\\/g, '/');
+  return `${normalizedBase}/${name}`;
+};
+
 // File type definitions for quick create
 const FILE_TYPES = [
   { extension: '.md', label: 'Markdown', icon: FileText, defaultContent: '# New Note\n\n' },
@@ -169,8 +186,8 @@ export const FileExplorer: React.FC = () => {
     if (!renameModal.entry || !renameModal.newName.trim()) return;
     
     const oldPath = renameModal.entry.path;
-    const parentDir = oldPath.substring(0, oldPath.lastIndexOf('\\'));
-    const newPath = `${parentDir}\\${renameModal.newName}`;
+    const parentDir = getParentDir(oldPath);
+    const newPath = joinPath(parentDir, renameModal.newName);
     
     try {
       await window.electronAPI.moveFile(oldPath, newPath);
@@ -207,14 +224,14 @@ export const FileExplorer: React.FC = () => {
     let newName = `${baseName} copy${ext}`;
     let counter = 2;
     
-    const parentDir = entry.path.substring(0, entry.path.lastIndexOf('\\'));
-    while (await window.electronAPI.exists(`${parentDir}\\${newName}`)) {
+    const parentDir = getParentDir(entry.path);
+    while (await window.electronAPI.exists(joinPath(parentDir, newName))) {
       newName = `${baseName} copy ${counter}${ext}`;
       counter++;
     }
     
     try {
-      await window.electronAPI.copyFile(entry.path, `${parentDir}\\${newName}`);
+      await window.electronAPI.copyFile(entry.path, joinPath(parentDir, newName));
       await refreshFileStructure();
     } catch (e) {
       console.error("Failed to duplicate", e);
@@ -238,15 +255,15 @@ export const FileExplorer: React.FC = () => {
       try {
         const filePath = (file as any).path;
         if (filePath) {
-          const fileName = filePath.split('\\').pop() || file.name;
-          let destPath = `${targetFolder}\\${fileName}`;
+          const fileName = getFileName(filePath) || file.name;
+          let destPath = joinPath(targetFolder, fileName);
           
           // Check if file already exists, append number if so
           let counter = 1;
           const ext = fileName.includes('.') ? '.' + fileName.split('.').pop() : '';
           const baseName = fileName.replace(ext, '');
           while (await window.electronAPI.exists(destPath)) {
-            destPath = `${targetFolder}\\${baseName} (${counter})${ext}`;
+            destPath = joinPath(targetFolder, `${baseName} (${counter})${ext}`);
             counter++;
           }
           
@@ -265,7 +282,7 @@ export const FileExplorer: React.FC = () => {
     if (targetFolder) {
       try {
         const fileName = entry.name;
-        const destPath = `${targetFolder}\\${fileName}`;
+        const destPath = joinPath(targetFolder, fileName);
         await window.electronAPI.moveFile(entry.path, destPath);
         closeFile(entry.path);
         await refreshFileStructure();
@@ -290,7 +307,7 @@ export const FileExplorer: React.FC = () => {
     let name = `Untitled${extension}`;
     let counter = 1;
     
-    while (await window.electronAPI.exists(`${currentPath}\\${name}`)) {
+    while (await window.electronAPI.exists(joinPath(currentPath, name))) {
       name = `Untitled ${counter}${extension}`;
       counter++;
     }
@@ -300,14 +317,17 @@ export const FileExplorer: React.FC = () => {
 
   const handleMoveFile = async (sourcePath: string, targetFolder: string) => {
     try {
-      const fileName = sourcePath.split('\\').pop();
+      const fileName = getFileName(sourcePath);
       if (!fileName) return;
       
-      const destPath = `${targetFolder}\\${fileName}`;
+      const destPath = joinPath(targetFolder, fileName);
       
       // Don't move if destination is the same as source parent
-      const sourceParent = sourcePath.substring(0, sourcePath.lastIndexOf('\\'));
-      if (sourceParent === targetFolder) return;
+      const sourceParent = getParentDir(sourcePath);
+      // Normalize both paths for comparison
+      const normalizedSourceParent = sourceParent.replace(/\\/g, '/');
+      const normalizedTargetFolder = targetFolder.replace(/\\/g, '/');
+      if (normalizedSourceParent === normalizedTargetFolder) return;
       
       await window.electronAPI.moveFile(sourcePath, destPath);
       await refreshFileStructure();
@@ -323,7 +343,7 @@ export const FileExplorer: React.FC = () => {
     
     try {
       const fileName = await generateUntitledName(fileType.extension);
-      const fullPath = `${currentPath}\\${fileName}`;
+      const fullPath = joinPath(currentPath, fileName);
       await createFile(fullPath, fileType.defaultContent);
       const files = await loadFileStructure(currentPath);
       setFileStructure(files);
@@ -342,12 +362,12 @@ export const FileExplorer: React.FC = () => {
       // Generate unique folder name
       let folderName = 'Untitled Folder';
       let counter = 1;
-      while (await window.electronAPI.exists(`${currentPath}\\${folderName}`)) {
+      while (await window.electronAPI.exists(joinPath(currentPath, folderName))) {
         folderName = `Untitled Folder ${counter}`;
         counter++;
       }
       
-      const fullPath = `${currentPath}\\${folderName}`;
+      const fullPath = joinPath(currentPath, folderName);
       await createFolder(fullPath);
       const files = await loadFileStructure(currentPath);
       setFileStructure(files);
@@ -368,9 +388,9 @@ export const FileExplorer: React.FC = () => {
       });
 
       if (selected && typeof selected === 'string') {
-        const fileName = selected.split('\\').pop();
+        const fileName = getFileName(selected);
         if (fileName) {
-          const destPath = `${currentPath}\\${fileName}`;
+          const destPath = joinPath(currentPath, fileName);
           await window.electronAPI.copyFile(selected, destPath);
           const files = await loadFileStructure(currentPath);
           setFileStructure(files);
@@ -413,15 +433,15 @@ export const FileExplorer: React.FC = () => {
           // Get the file path - in Electron, dropped files have a path property
           const filePath = (file as any).path as string;
           if (filePath) {
-            const fileName = filePath.split('\\').pop() || file.name;
-            let destPath = `${currentPath}\\${fileName}`;
+            const fileName = getFileName(filePath) || file.name;
+            let destPath = joinPath(currentPath, fileName);
             
             // Check if file already exists, append number if so
             let counter = 1;
             const ext = fileName.includes('.') ? '.' + fileName.split('.').pop() : '';
             const baseName = fileName.replace(ext, '');
             while (await window.electronAPI.exists(destPath)) {
-              destPath = `${currentPath}\\${baseName} (${counter})${ext}`;
+              destPath = joinPath(currentPath, `${baseName} (${counter})${ext}`);
               counter++;
             }
             

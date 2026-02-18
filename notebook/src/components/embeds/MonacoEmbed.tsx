@@ -23,7 +23,7 @@ export const MonacoEmbed: React.FC<MonacoEmbedProps> = ({ code, language = 'java
   // Use controlled mode (value) for readOnly, uncontrolled (defaultValue) for editable
   // This prevents re-renders during editing while still allowing updates for preview
   return (
-    <div className="w-full h-full border rounded overflow-hidden">
+    <div className="w-full h-full overflow-hidden" data-embed="monaco">
       <Editor
         height="100%"
         defaultLanguage={language}

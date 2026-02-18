@@ -277,13 +277,13 @@ class CodeBlockWidget extends WidgetType {
     container.className = 'cm-codeblock-widget';
     
     // Calculate height based on line count
+    // Use box-sizing: border-box so border is included in height calculation
     const lineCount = this.code.split('\n').length;
     const height = Math.min(400, Math.max(100, lineCount * 20 + 20));
     container.style.height = `${height}px`;
-    container.style.margin = '8px 0';
-    container.style.borderRadius = '8px';
-    container.style.overflow = 'hidden';
-    container.style.border = '1px solid var(--border, #374151)';
+    container.style.boxSizing = 'border-box';
+    // Note: margin and border are set via CSS class to avoid duplication
+    // The CSS class .cm-codeblock-widget handles margin, borderRadius, overflow, border
     
     this.renderMonaco(container, view);
     
@@ -579,9 +579,11 @@ export const livePreviewTheme = EditorView.baseTheme({
   },
   '.cm-codeblock-widget': {
     display: 'block',
-    margin: '8px 0',
+    boxSizing: 'border-box',
     borderRadius: '8px',
+    margin: '0 0 0 0 !important', // Override default margin to prevent extra space around code blocks
     overflow: 'hidden',
+    border: '1px solid var(--border, #374151)',
   },
   '.cm-wikilink-widget': {
     cursor: 'pointer',
@@ -668,17 +670,9 @@ export function createMarkdownHidingPlugin() {
           widgets.push(Decoration.replace({}).range(end - 2, end));
         }
         
-        // Hide inline code markers: `code`
-        const codeRegex = /`([^`]+)`/g;
-        while ((match = codeRegex.exec(lineText)) !== null) {
-          const start = line.from + match.index;
-          const end = start + match[0].length;
-          
-          // Hide opening backtick
-          widgets.push(Decoration.replace({}).range(start, start + 1));
-          // Hide closing backtick
-          widgets.push(Decoration.replace({}).range(end - 1, end));
-        }
+        // NOTE: Do not hide inline code backticks (`code`) here.
+        // Replacing those delimiters with zero-width decorations causes
+        // cursor hit-testing/placement issues around grave characters.
         
         // Hide header markers: # ## ### etc
         const headerMatch = lineText.match(/^(#{1,6})\s/);

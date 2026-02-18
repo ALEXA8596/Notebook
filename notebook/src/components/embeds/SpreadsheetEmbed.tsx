@@ -174,7 +174,7 @@ export const SpreadsheetEmbed: React.FC<SpreadsheetEmbedProps> = ({ dataString, 
   };
 
   return (
-    <div className="w-full h-full flex flex-col overflow-hidden bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <div className="w-full h-full flex flex-col overflow-hidden bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100" data-embed="spreadsheet">
       {/* Toolbar */}
       <div className="flex items-center gap-2 p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 shrink-0">
         <div className="flex items-center gap-1 border-r border-gray-300 dark:border-gray-600 pr-2">

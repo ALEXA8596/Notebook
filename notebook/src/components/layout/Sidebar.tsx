@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Settings, Search, Save, FolderOpen, Network, Home, 
   Calendar, Bot, CheckSquare, CalendarDays, BarChart3, Command,
-  Cloud, Pencil, Timer, StickyNote, Info, Layout, Shapes, Grid2x2
+  Cloud, Pencil, Timer, StickyNote, Info, Layout, Shapes, Grid2x2, PanelRight
 } from 'lucide-react';
 import { useAppStore } from '../../store/store';
 import { openVault, createFile } from '../../lib/fileSystem';
@@ -48,6 +48,7 @@ export const Sidebar: React.FC = () => {
   const handleSave = () => window.dispatchEvent(new CustomEvent('app-save'));
   const handleOpenGraph = () => window.dispatchEvent(new CustomEvent('app-open-graph'));
   const handleSearch = () => window.dispatchEvent(new CustomEvent('app-toggle-search'));
+  const handleToggleExplorer = () => window.dispatchEvent(new CustomEvent('app-toggle-explorer'));
 
   const handleDailyNote = async () => {
     if (!currentPath) {
@@ -79,6 +80,7 @@ export const Sidebar: React.FC = () => {
   const allItems: SidebarItem[] = [
     // Navigation
     { id: 'home', icon: Layout, label: 'Home Dashboard', description: 'View your personalized dashboard with recent files, quick access, and productivity overview', category: 'navigation', action: () => window.dispatchEvent(new CustomEvent('app-open-homepage')) },
+    { id: 'explorer', icon: PanelRight, label: 'Toggle Explorer', description: 'Show or hide the file explorer pane', category: 'navigation', action: handleToggleExplorer },
     { id: 'vault', icon: Home, label: 'Vault Manager', description: 'Switch between vaults, create new vaults, or open existing folders as vaults', category: 'navigation', action: handleOpenVaultManager },
     { id: 'graph', icon: Network, label: 'Graph View', description: 'Visualize connections and links between your notes as an interactive network graph', category: 'navigation', action: handleOpenGraph },
     { id: 'search', icon: Search, label: 'Search', description: 'Search through all notes and files in your vault with full-text search', shortcut: `${MOD}/`, category: 'navigation', action: handleSearch },
