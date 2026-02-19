@@ -7,6 +7,7 @@
  * - External links ([...](...))
  * - Horizontal rules (---, ***, ___)
  * - Code blocks (```language ... ```)
+ * - Tables (| col | col | with alignment support)
  */
 
 import { WidgetType, EditorView, Decoration, DecorationSet, ViewPlugin, ViewUpdate } from '@codemirror/view';
@@ -200,6 +201,89 @@ class HorizontalRuleWidget extends WidgetType {
 
   eq(): boolean {
     return true;
+  }
+
+  ignoreEvent(): boolean {
+    return true;
+  }
+}
+
+class TableWidget extends WidgetType {
+  constructor(
+    readonly tableText: string,
+    readonly from: number,
+    readonly to: number
+  ) {
+    super();
+  }
+
+  toDOM(): HTMLElement {
+    const container = document.createElement('div');
+    container.className = 'cm-table-widget';
+    
+    const table = document.createElement('table');
+    table.className = 'cm-table';
+    
+    const lines = this.tableText.split('\n').filter(line => line.trim());
+    if (lines.length < 2) {
+      // Need at least header and separator
+      container.textContent = this.tableText;
+      return container;
+    }
+    
+    // Parse header row
+    const headerCells = this.parseCells(lines[0]);
+    
+    // Parse separator row to get alignments
+    const separatorCells = this.parseCells(lines[1]);
+    const alignments = separatorCells.map(cell => {
+      const trimmed = cell.trim();
+      if (trimmed.startsWith(':') && trimmed.endsWith(':')) return 'center';
+      if (trimmed.endsWith(':')) return 'right';
+      return 'left';
+    });
+    
+    // Create thead
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    headerCells.forEach((cell, i) => {
+      const th = document.createElement('th');
+      th.textContent = cell.trim();
+      th.style.textAlign = alignments[i] || 'left';
+      headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+    
+    // Create tbody with data rows
+    const tbody = document.createElement('tbody');
+    for (let i = 2; i < lines.length; i++) {
+      const cells = this.parseCells(lines[i]);
+      const row = document.createElement('tr');
+      cells.forEach((cell, j) => {
+        const td = document.createElement('td');
+        td.textContent = cell.trim();
+        td.style.textAlign = alignments[j] || 'left';
+        row.appendChild(td);
+      });
+      tbody.appendChild(row);
+    }
+    table.appendChild(tbody);
+    
+    container.appendChild(table);
+    return container;
+  }
+  
+  private parseCells(line: string): string[] {
+    // Remove leading/trailing pipes and split
+    let trimmed = line.trim();
+    if (trimmed.startsWith('|')) trimmed = trimmed.slice(1);
+    if (trimmed.endsWith('|')) trimmed = trimmed.slice(0, -1);
+    return trimmed.split('|');
+  }
+
+  eq(other: TableWidget): boolean {
+    return other.tableText === this.tableText;
   }
 
   ignoreEvent(): boolean {
@@ -460,6 +544,40 @@ function buildSingleLineDecorations(view: EditorView, vaultPath?: string, codeBl
 // Embed types handled by Editor.tsx - should NOT be rendered as code blocks by livePreview
 const EMBED_TYPES = ['website', 'desmos', 'excalidraw', 'mermaid', 'monaco', 'kanban', 'spreadsheet'];
 
+// Find table ranges in document
+function findTableRanges(doc: { toString: () => string }, selection: { from: number; to: number }): Array<{ from: number; to: number; tableText: string }> {
+  const ranges: Array<{ from: number; to: number; tableText: string }> = [];
+  const fullText = doc.toString();
+  
+  // Match markdown tables: header row, separator row (with dashes and optional colons), and data rows
+  // Table must have at least header + separator
+  const tableRegex = /^(\|[^\n]+\|\n\|[:\-\s|]+\|(?:\n\|[^\n]+\|)*)/gm;
+  let match;
+  
+  while ((match = tableRegex.exec(fullText)) !== null) {
+    const tableStart = match.index;
+    const tableEnd = tableStart + match[0].length;
+    const tableText = match[0];
+    
+    // Validate it's actually a table (separator row must have dashes)
+    const lines = tableText.split('\n');
+    if (lines.length >= 2) {
+      const separatorLine = lines[1];
+      // Check if separator line has proper format (contains dashes)
+      if (/^\|[\s:\-|]+\|$/.test(separatorLine.trim()) && separatorLine.includes('-')) {
+        // Check if cursor is inside this table
+        const cursorInTable = selection.from >= tableStart && selection.from <= tableEnd;
+        
+        if (!cursorInTable) {
+          ranges.push({ from: tableStart, to: tableEnd, tableText });
+        }
+      }
+    }
+  }
+  
+  return ranges;
+}
+
 // Find code block ranges in document
 function findCodeBlockRanges(doc: { toString: () => string }, selection: { from: number; to: number }): Array<{ from: number; to: number; language: string; code: string }> {
   const ranges: Array<{ from: number; to: number; language: string; code: string }> = [];
@@ -517,6 +635,47 @@ export function createCodeBlockField() {
         for (const range of ranges) {
           widgets.push(Decoration.replace({
             widget: new CodeBlockWidget(range.code, range.language, range.from, range.to),
+            block: true,
+          }).range(range.from, range.to));
+        }
+        
+        return Decoration.set(widgets);
+      }
+      return decorations;
+    },
+    provide(field) {
+      return EditorView.decorations.from(field);
+    }
+  });
+}
+
+// ========== State Field for Table Decorations (multiline) ==========
+
+export function createTableField() {
+  return StateField.define<DecorationSet>({
+    create(state) {
+      const selection = state.selection.main;
+      const ranges = findTableRanges(state.doc, selection);
+      const widgets: Range<Decoration>[] = [];
+      
+      for (const range of ranges) {
+        widgets.push(Decoration.replace({
+          widget: new TableWidget(range.tableText, range.from, range.to),
+          block: true,
+        }).range(range.from, range.to));
+      }
+      
+      return Decoration.set(widgets);
+    },
+    update(decorations, tr) {
+      if (tr.docChanged || tr.selection) {
+        const selection = tr.state.selection.main;
+        const ranges = findTableRanges(tr.state.doc, selection);
+        const widgets: Range<Decoration>[] = [];
+        
+        for (const range of ranges) {
+          widgets.push(Decoration.replace({
+            widget: new TableWidget(range.tableText, range.from, range.to),
             block: true,
           }).range(range.from, range.to));
         }
@@ -595,6 +754,32 @@ export const livePreviewTheme = EditorView.baseTheme({
     border: 'none',
     borderTop: '1px solid',
     margin: '16px 0',
+  },
+  // Table styles
+  '.cm-table-widget': {
+    display: 'block',
+    margin: '12px 0',
+    overflowX: 'auto',
+  },
+  '.cm-table': {
+    borderCollapse: 'collapse',
+    width: '100%',
+    fontSize: '14px',
+  },
+  '.cm-table th': {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderBottom: '2px solid var(--border, #374151)',
+    padding: '8px 12px',
+    fontWeight: '600',
+    color: 'var(--text-primary, #f5f5f5)',
+  },
+  '.cm-table td': {
+    borderBottom: '1px solid var(--border, #374151)',
+    padding: '8px 12px',
+    color: 'var(--text-primary, #dcddde)',
+  },
+  '.cm-table tr:hover td': {
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
   },
   // Hide certain markdown syntax when not editing
   '.cm-formatting': {
@@ -767,6 +952,7 @@ export function livePreviewExtension(vaultPath?: string) {
   return [
     livePreviewTheme,
     createCodeBlockField(),
+    createTableField(),
     createLivePreviewPlugin(vaultPath),
     createMarkdownHidingPlugin(),
     createHeadingStylePlugin(),

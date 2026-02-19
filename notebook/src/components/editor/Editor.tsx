@@ -9,7 +9,7 @@ import { MonacoEmbed } from '../embeds/MonacoEmbed';
 import { KanbanEmbed } from '../embeds/KanbanEmbed';
 import { SpreadsheetEmbed } from '../embeds/SpreadsheetEmbed';
 import { ContextMenu, ContextMenuOption } from '../ui/ContextMenu';
-import { Link, ExternalLink, Scissors, Copy, Clipboard, Type, AlignLeft, Plus, GripHorizontal, Code, Trash2, SpellCheck } from 'lucide-react';
+import { Link, ExternalLink, Scissors, Copy, Clipboard, Type, AlignLeft, Plus, GripHorizontal, Code, Trash2, SpellCheck, Table2 } from 'lucide-react';
 import { useAppStore } from '../../store/store';
 
 // Get word at cursor position
@@ -348,6 +348,40 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange, showStatusBar
     }
   };
 
+  const insertTable = () => {
+    if (!contextMenu) return;
+    
+    const tableText = '| Column 1 | Column 2 | Column 3 |\n|----------|----------|----------|\n| Cell 1   | Cell 2   | Cell 3   |\n| Cell 4   | Cell 5   | Cell 6   |';
+
+    if (contextMenu.blockId) {
+      const block = blocks.find(b => b.id === contextMenu.blockId);
+      if (block && block.type === 'text') {
+        const normalized = block.content.replace(/\r\n/g, '\n');
+        const rawIndex = contextMenu.cursorIndex !== undefined ? contextMenu.cursorIndex : normalized.length;
+        const index = Math.max(0, Math.min(rawIndex, normalized.length));
+
+        const before = normalized.slice(0, index);
+        const after = normalized.slice(index);
+
+        const needsLeadingNewline = before.length > 0 && !before.endsWith('\n');
+        const needsTrailingNewline = after.length > 0 && !after.startsWith('\n');
+
+        const newContent =
+          before +
+          (needsLeadingNewline ? '\n' : '') +
+          tableText +
+          (needsTrailingNewline ? '\n' : '') +
+          after;
+
+        handleBlockChange(block.id, newContent);
+      } else {
+        onChange(content + '\n' + tableText);
+      }
+    } else {
+      onChange(content + '\n' + tableText);
+    }
+  };
+
   // Replace a word with a suggestion
   const replaceWord = (replacement: string) => {
     if (!contextMenu?.blockId || !contextMenu.wordInfo) return;
@@ -407,6 +441,8 @@ export const Editor: React.FC<EditorProps> = ({ content, onChange, showStatusBar
         label: 'Insert', 
         icon: <Plus size={14} />,
         submenu: [
+          { label: 'Table', icon: <Table2 size={14} />, action: () => insertTable() },
+          { separator: true, label: '' },
           { label: 'Desmos', action: () => insertEmbed('desmos') },
           { label: 'Excalidraw', action: () => insertEmbed('excalidraw') },
           { label: 'Website', action: () => insertEmbed('website') },

@@ -141,7 +141,7 @@ const FileNode: React.FC<FileNodeProps> = ({ entry, depth = 0, onMoveFile, onCon
 };
 
 export const FileExplorer: React.FC = () => {
-  const { fileStructure, currentPath, setFileStructure, closeFile } = useAppStore();
+  const { fileStructure, currentPath, setFileStructure, closeFile, renameFileContent } = useAppStore();
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
   const quickCreateRef = useRef<HTMLDivElement>(null);
   
@@ -191,6 +191,8 @@ export const FileExplorer: React.FC = () => {
     
     try {
       await window.electronAPI.moveFile(oldPath, newPath);
+      // Update store to reflect the renamed file
+      renameFileContent(oldPath, newPath);
       await refreshFileStructure();
       setRenameModal({ isOpen: false, entry: null, newName: '' });
     } catch (e) {
@@ -284,7 +286,8 @@ export const FileExplorer: React.FC = () => {
         const fileName = entry.name;
         const destPath = joinPath(targetFolder, fileName);
         await window.electronAPI.moveFile(entry.path, destPath);
-        closeFile(entry.path);
+        // Update store to reflect the moved file
+        renameFileContent(entry.path, destPath);
         await refreshFileStructure();
       } catch (e) {
         console.error("Failed to move", e);
@@ -330,6 +333,8 @@ export const FileExplorer: React.FC = () => {
       if (normalizedSourceParent === normalizedTargetFolder) return;
       
       await window.electronAPI.moveFile(sourcePath, destPath);
+      // Update store to reflect the moved file
+      renameFileContent(sourcePath, destPath);
       await refreshFileStructure();
     } catch (e) {
       console.error("Failed to move file", e);
